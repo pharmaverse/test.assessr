@@ -14,7 +14,9 @@
 <url><loc>/reference/create_covr_list_no_skip.html</loc></url>
 <url><loc>/reference/create_empty_covr_list.html</loc></url>
 <url><loc>/reference/create_results_summary.html</loc></url>
+<url><loc>/reference/create_test_reporter.html</loc></url>
 <url><loc>/reference/find_project_root.html</loc></url>
+<url><loc>/reference/fix_test_context.html</loc></url>
 <url><loc>/reference/get_expect.html</loc></url>
 <url><loc>/reference/get_function_no_tests.html</loc></url>
 <url><loc>/reference/get_package_coverage.html</loc></url>
