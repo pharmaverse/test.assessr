@@ -94,7 +94,7 @@
 <h1 id="overview">Overview<a class="anchor" aria-label="anchor" href="#overview"></a>
 </h1>
 <p>test.assessr helps in the assessment of a package’s test reliability and validity.</p>
-<p>It calculates unit test coverage for packages with standard testing frameworks and non-standard testing frameworks.</p>
+<p>It calculates unit test coverage for packages with standard testing frameworks and non-standard testing frameworks, including Bioconductor packages.</p>
 </div>
 <div class="section level1">
 <h1 id="description">Description<a class="anchor" aria-label="anchor" href="#description"></a>
@@ -155,29 +155,36 @@
 <code class="sourceCode R"><span><span class="co"># for local tar.gz R package</span></span>
 <span><span class="va">dp</span> <span class="op">&lt;-</span> <span class="op">(</span><span class="va">path</span><span class="op">/</span><span class="va">to</span><span class="op">/</span><span class="va">your</span><span class="op">/</span><span class="va">package</span><span class="op">)</span></span>
 <span></span>
-<span><span class="va">test_package_coverage</span> <span class="op">&lt;-</span> <span class="fu">test_package_coverage</span><span class="op">(</span><span class="va">dp</span><span class="op">)</span></span></code></pre></div>
+<span><span class="va">test_package_coverage</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/get_package_coverage.html">get_package_coverage</a></span><span class="op">(</span><span class="va">dp</span><span class="op">)</span></span>
+<span></span>
+<span><span class="fu"><a href="reference/generate_test_report.html">generate_test_report</a></span><span class="op">(</span><span class="va">test_package_coverage</span><span class="op">)</span></span></code></pre></div>
 </div>
 <div class="section level2">
-<h2 id="results">results<a class="anchor" aria-label="anchor" href="#results"></a>
+<h2 id="testassessr-results">
+<code>test.assessr</code> results<a class="anchor" aria-label="anchor" href="#testassessr-results"></a>
 </h2>
-</div>
-<div class="section level2">
-<h2 id="test_package_coverage">test_package_coverage<a class="anchor" aria-label="anchor" href="#test_package_coverage"></a>
-</h2>
-<pre><code>test_package_coverage
-├── total_cov: "0.0987"
-└── res_cov
-    ├── name: "MASS"
-    ├── coverage
-    │   ├── filecoverage: : num [1:42(1d)] 0 0 0 0 0 0 0 0 0 50 ...
-    │   └── totalcoverage: num 9.87
-    └── errors: logi NA
-    └── notes: logi NA</code></pre>
+<p>For a package with a standard testing framework such as <code>testthat</code> or <code>testit</code> or non-standard testing frameworks such as <code>BiocGenerics</code> and <code>RUnit</code>, <code>test_assessr</code> can provide data on which tests are passing and which tests are skipped.</p>
+<p>The standard testing framework test report tells you which tests have passed:</p>
+<p><img src="reference/figures/tp0014-stf-tests-passing.png"></p>
+<p>The report provides information on which test blocks have passed and the start line of each test block.</p>
+<p>The standard testing framework test report tells you which tests have been skipped:</p>
+<p><img src="reference/figures/tp0014-stf-tests-skipped.png"></p>
+<p>The report provides information on which test blocks have passed, expectation type, and the start line of each test block.</p>
+<p>The non-standard testing framework test report tells you which functions have no tests:</p>
+<p><img src="reference/figures/MASS-nstf-no-tests.png"></p>
+<p>The report tells you which tests have passed:</p>
+<p><img src="reference/figures/MASS-nstf-tests-passing.png"></p>
+<p>The test report tells you which tests have been skipped:</p>
+<p><img src="reference/figures/MASS-nstf-tests-skipped.png"></p>
 </div>
 </div>
 <div class="section level1">
 <h1 id="currentfuture-directions">Current/Future directions<a class="anchor" aria-label="anchor" href="#currentfuture-directions"></a>
 </h1>
+<ul>
+<li>to develop methods for checking the validity of test data</li>
+<li>to develop methods of checking mocks</li>
+</ul>
 </div>
 <div class="section level1">
 <h1 id="acknowledgements">Acknowledgements<a class="anchor" aria-label="anchor" href="#acknowledgements"></a>
