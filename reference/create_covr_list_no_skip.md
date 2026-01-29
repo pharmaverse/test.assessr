@@ -5,7 +5,13 @@ create covr_list when no tests are skipped
 ## Usage
 
 ``` r
-create_covr_list_no_skip(test_map, test_results_long, pkg_source_path, pkg)
+create_covr_list_no_skip(
+  test_map,
+  test_results_long,
+  pkg_source_path,
+  pkg,
+  preserve_vars = "old"
+)
 ```
 
 ## Arguments
@@ -25,6 +31,10 @@ create_covr_list_no_skip(test_map, test_results_long, pkg_source_path, pkg)
 - pkg:
 
   \- name of the package
+
+- preserve_vars:
+
+  Character. preserve \`old\` for CRAN examples
 
 ## Value
 

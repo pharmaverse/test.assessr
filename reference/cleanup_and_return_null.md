@@ -9,7 +9,7 @@ scenarios.
 ## Usage
 
 ``` r
-cleanup_and_return_null(msg = NULL, env = cov_env)
+cleanup_and_return_null(msg = NULL, env = cov_env, preserve_vars = c("old"))
 ```
 
 ## Arguments
@@ -22,6 +22,10 @@ cleanup_and_return_null(msg = NULL, env = cov_env)
 - env:
 
   A character string specifying the covr env
+
+- preserve_vars:
+
+  Character. preserve \`old\` for CRAN examples
 
 ## Value
 

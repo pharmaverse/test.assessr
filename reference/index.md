@@ -2,8 +2,6 @@
 
 ## All functions
 
-- [`contains_vignette_folder()`](contains_vignette_folder.md) : Check
-  for Vignette Folder and .Rmd Files in a .tar File
 - [`create_coverage_skip_stf()`](coverage_skip.md) : Run covr with
   failing tests
 - [`extract_short_path()`](extract_short_path.md) : Helper to extract

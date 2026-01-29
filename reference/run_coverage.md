@@ -39,10 +39,8 @@ install_list <- set_up_pkg(dp)
 #> unpacking test.package.0001 locally
 #> unpacked test.package.0001 locally
 
-build_vignettes <- install_list$build_vignettes
 package_installed <- install_list$package_installed
 pkg_source_path <- install_list$pkg_source_path
-rcmdcheck_args <- install_list$rcmdcheck_args
 
 package_installed <- install_package_local(pkg_source_path)
 #> installing test.package.0001 locally

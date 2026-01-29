@@ -48,7 +48,7 @@ it returns a default coverage result indicating no functions were tested.</p>
 
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">run_covr_modes</span><span class="op">(</span><span class="va">pkg_source_path</span>, covr_timeout <span class="op">=</span> <span class="fl">60</span><span class="op">)</span></span></code></pre></div>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">run_covr_modes</span><span class="op">(</span><span class="va">pkg_source_path</span>, covr_timeout <span class="op">=</span> <span class="fl">60</span>, preserve_vars <span class="op">=</span> <span class="st">"old"</span><span class="op">)</span></span></code></pre></div>
     </div>
 
     <div class="section level2">
@@ -61,6 +61,10 @@ it returns a default coverage result indicating no functions were tested.</p>
 
 <dt id="arg-covr-timeout">covr_timeout<a class="anchor" aria-label="anchor" href="#arg-covr-timeout"></a></dt>
 <dd><p>Numeric. Timeout in seconds for running coverage analysis. Default is 60.</p></dd>
+
+
+<dt id="arg-preserve-vars">preserve_vars<a class="anchor" aria-label="anchor" href="#arg-preserve-vars"></a></dt>
+<dd><p>Character. preserve `old` for CRAN examples</p></dd>
 
 </dl></div>
     <div class="section level2">
@@ -88,16 +92,13 @@ it returns a default coverage result indicating no functions were tested.</p>
 <span class="r-in"><span><span class="co"># set up package</span></span></span>
 <span class="r-in"><span><span class="va">install_list</span> <span class="op">&lt;-</span> <span class="fu"><a href="set_up_pkg.html">set_up_pkg</a></span><span class="op">(</span><span class="va">dp</span><span class="op">)</span></span></span>
 <span class="r-in"><span></span></span>
-<span class="r-in"><span><span class="va">build_vignettes</span> <span class="op">&lt;-</span> <span class="va">install_list</span><span class="op">$</span><span class="va">build_vignettes</span></span></span>
 <span class="r-in"><span><span class="va">package_installed</span> <span class="op">&lt;-</span> <span class="va">install_list</span><span class="op">$</span><span class="va">package_installed</span></span></span>
 <span class="r-in"><span><span class="va">pkg_source_path</span> <span class="op">&lt;-</span> <span class="va">install_list</span><span class="op">$</span><span class="va">pkg_source_path</span></span></span>
-<span class="r-in"><span><span class="va">rcmdcheck_args</span> <span class="op">&lt;-</span> <span class="va">install_list</span><span class="op">$</span><span class="va">rcmdcheck_args</span></span></span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># install package locally to ensure test works</span></span></span>
 <span class="r-in"><span><span class="va">package_installed</span> <span class="op">&lt;-</span> <span class="fu"><a href="install_package_local.html">install_package_local</a></span><span class="op">(</span><span class="va">pkg_source_path</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="va">package_installed</span> <span class="op">&lt;-</span> <span class="cn">TRUE</span></span></span>
 <span class="r-in"><span></span></span>
-<span class="r-in"><span><span class="va">rcmdcheck_args</span><span class="op">$</span><span class="va">path</span> <span class="op">&lt;-</span> <span class="va">pkg_source_path</span></span></span>
 <span class="r-in"><span><span class="va">covr_mode_list</span> <span class="op">&lt;-</span> <span class="fu">run_covr_modes</span><span class="op">(</span><span class="va">pkg_source_path</span><span class="op">)</span></span></span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="fu"><a href="https://rdrr.io/r/base/options.html" class="external-link">options</a></span><span class="op">(</span><span class="va">old</span><span class="op">)</span></span></span>

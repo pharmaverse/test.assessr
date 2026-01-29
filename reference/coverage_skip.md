@@ -13,7 +13,8 @@ create_coverage_skip_stf(
   pkg,
   test_path = "tests/testthat",
   test_skip,
-  test_map
+  test_map,
+  preserve_vars = "old"
 )
 ```
 
@@ -38,6 +39,10 @@ create_coverage_skip_stf(
 - test_map:
 
   data.frame, mapping of all the tests in the package
+
+- preserve_vars:
+
+  Character. preserve \`old\` for CRAN examples
 
 ## Details
 

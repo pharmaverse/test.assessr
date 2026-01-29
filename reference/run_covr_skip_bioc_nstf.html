@@ -102,16 +102,13 @@ tests in `inst/unitTests` or ship a `tests/run_unitTests.R` wrapper.</p>
 <span class="r-in"><span><span class="co"># set up package</span></span></span>
 <span class="r-in"><span><span class="va">install_list</span> <span class="op">&lt;-</span> <span class="fu"><a href="set_up_pkg.html">set_up_pkg</a></span><span class="op">(</span><span class="va">dp</span><span class="op">)</span></span></span>
 <span class="r-in"><span></span></span>
-<span class="r-in"><span><span class="va">build_vignettes</span> <span class="op">&lt;-</span> <span class="va">install_list</span><span class="op">$</span><span class="va">build_vignettes</span></span></span>
 <span class="r-in"><span><span class="va">package_installed</span> <span class="op">&lt;-</span> <span class="va">install_list</span><span class="op">$</span><span class="va">package_installed</span></span></span>
 <span class="r-in"><span><span class="va">pkg_source_path</span> <span class="op">&lt;-</span> <span class="va">install_list</span><span class="op">$</span><span class="va">pkg_source_path</span></span></span>
-<span class="r-in"><span><span class="va">rcmdcheck_args</span> <span class="op">&lt;-</span> <span class="va">install_list</span><span class="op">$</span><span class="va">rcmdcheck_args</span></span></span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># install package locally to ensure test works</span></span></span>
 <span class="r-in"><span><span class="va">package_installed</span> <span class="op">&lt;-</span> <span class="fu"><a href="install_package_local.html">install_package_local</a></span><span class="op">(</span><span class="va">pkg_source_path</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="va">package_installed</span> <span class="op">&lt;-</span> <span class="cn">TRUE</span></span></span>
 <span class="r-in"><span></span></span>
-<span class="r-in"><span><span class="va">rcmdcheck_args</span><span class="op">$</span><span class="va">path</span> <span class="op">&lt;-</span> <span class="va">pkg_source_path</span></span></span>
 <span class="r-in"><span><span class="va">test_pkg_data</span> <span class="op">&lt;-</span> <span class="fu"><a href="check_pkg_tests_and_snaps.html">check_pkg_tests_and_snaps</a></span><span class="op">(</span><span class="va">pkg_source_path</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="va">test_covr_list</span> <span class="op">&lt;-</span> <span class="fu">run_covr_skip_bioc_nstf</span><span class="op">(</span><span class="va">pkg_source_path</span>, <span class="va">test_pkg_data</span><span class="op">)</span></span></span>
 <span class="r-in"><span></span></span>

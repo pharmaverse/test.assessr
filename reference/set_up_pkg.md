@@ -5,7 +5,7 @@ Creates information on package installation
 ## Usage
 
 ``` r
-set_up_pkg(dp, check_type = "1")
+set_up_pkg(dp)
 ```
 
 ## Arguments
@@ -13,10 +13,6 @@ set_up_pkg(dp, check_type = "1")
 - dp:
 
   data path and name for the package.
-
-- check_type:
-
-  basic R CMD check type - "1" CRAN R CMD check_type - "2"
 
 ## Value
 

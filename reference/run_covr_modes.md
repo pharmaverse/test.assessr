@@ -9,7 +9,7 @@ tested.
 ## Usage
 
 ``` r
-run_covr_modes(pkg_source_path, covr_timeout = 60)
+run_covr_modes(pkg_source_path, covr_timeout = 60, preserve_vars = "old")
 ```
 
 ## Arguments
@@ -22,6 +22,10 @@ run_covr_modes(pkg_source_path, covr_timeout = 60)
 
   Numeric. Timeout in seconds for running coverage analysis. Default is
   60.
+
+- preserve_vars:
+
+  Character. preserve \`old\` for CRAN examples
 
 ## Value
 
@@ -52,16 +56,13 @@ dp <- system.file("test-data",
 # set up package
 install_list <- set_up_pkg(dp)
 
-build_vignettes <- install_list$build_vignettes
 package_installed <- install_list$package_installed
 pkg_source_path <- install_list$pkg_source_path
-rcmdcheck_args <- install_list$rcmdcheck_args
 
 # install package locally to ensure test works
 package_installed <- install_package_local(pkg_source_path)
 package_installed <- TRUE
 
-rcmdcheck_args$path <- pkg_source_path
 covr_mode_list <- run_covr_modes(pkg_source_path)
 
 options(old)
