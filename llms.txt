@@ -1,0 +1,160 @@
+# test.assessr ![](reference/figures/test_assessr.png)
+
+# Overview
+
+test.assessr helps in the assessment of a package’s test reliability and
+validity.
+
+It calculates unit test coverage for packages with standard testing
+frameworks and non-standard testing frameworks, including Bioconductor
+packages.
+
+# Description
+
+This package executes the following tasks:
+
+1.  upload the source package(`tar.gz` file)
+
+2.  Unpack the `tar.gz` file
+
+3.  Install the package locally
+
+4.  Run code coverage
+
+# Package Installation
+
+## from [Github](https://github.com/Sanofi-GitHub/test.assessr)
+
+- Create a `Personal Access Token` (PAT) on `github`
+
+  - Log into your `github` account
+  - Go to the token settings URL using the [Token Settings
+    URL](https://github.com/settings/tokens)
+    - (do not forget to add the SSH `Sanofi-GitHub` authorization)
+
+- Create a `.Renviron` file with your GITHUBTOKEN as:
+
+&nbsp;
+
+    # .Renviron
+    GITHUBTOKEN=dfdxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxfdf
+
+- restart R session
+- You can install the package with:
+
+&nbsp;
+
+    auth_token = Sys.getenv("GITHUBTOKEN")
+    devtools::install_github("Sanofi-GitHub/test.assessr", ref = "main", auth_token = auth_token)
+
+# Usage
+
+## Assessing your own package for test coverage
+
+To assess your package’s test coverage, do the following steps:
+
+1 - save your package as a `tar.gz` file
+
+- This can be done in `RStudio` -\> `Build Tab` -\> `More` -\>
+  `Build Source Package`
+
+2 - Run the following code sample by loading or add path parameter to
+your `tar.gz` package source code
+
+``` r
+# for local tar.gz R package
+dp <- (path/to/your/package)
+
+test_package_coverage <- get_package_coverage(dp)
+
+generate_test_report(test_package_coverage)
+```
+
+## `test.assessr` results
+
+For a package with a standard testing framework such as `testthat` or
+`testit` or non-standard testing frameworks such as `BiocGenerics` and
+`RUnit`, `test_assessr` can provide data on which tests are passing and
+which tests are skipped.
+
+The standard testing framework test report tells you which tests have
+passed:
+
+![](reference/figures/tp0014-stf-tests-passing.png)
+
+The report provides information on which test blocks have passed and the
+start line of each test block.
+
+The standard testing framework test report tells you which tests have
+been skipped:
+
+![](reference/figures/tp0014-stf-tests-skipped.png)
+
+The report provides information on which test blocks have passed,
+expectation type, and the start line of each test block.
+
+The non-standard testing framework test report tells you which functions
+have no tests:
+
+![](reference/figures/MASS-nstf-no-tests.png)
+
+The report tells you which tests have passed:
+
+![](reference/figures/MASS-nstf-tests-passing.png)
+
+The test report tells you which tests have been skipped:
+
+![](reference/figures/MASS-nstf-tests-skipped.png)
+
+# Current/Future directions
+
+- to develop methods for checking the validity of test data
+- to develop methods of checking mocks
+
+# Acknowledgements
+
+The project is inspired by the
+[`covrpage`](https://github.com/yonicd/covrpage) and
+[`mpn.scorecard`](https://github.com/metrumresearchgroup/mpn.scorecard)
+packages and draws on some of their ideas and functions.
+
+# Package index
+
+## All functions
+
+- [`contains_vignette_folder()`](contains_vignette_folder.md) : Check
+  for Vignette Folder and .Rmd Files in a .tar File
+- [`create_coverage_skip_stf()`](coverage_skip.md) : Run covr with
+  failing tests
+- [`extract_short_path()`](extract_short_path.md) : Helper to extract
+  "R/\<file\>" from any path by taking the last two components
+- [`generate_test_report()`](generate_test_report.md) : Generate HTML
+  Report for Package Test Assessment
+- [`get_package_coverage()`](get_package_coverage.md) : get test package
+  coverage
+- [`get_pkg_name()`](get_pkg_name.md) : get package name for display
+- [`install_package_local()`](install_package_local.md) : Install
+  package locally
+- [`map_test()`](map_test.md) : Map the hierarchy structure of a
+  testthat test file
+- [`map_tests_stf()`](map_testthat.md) : Map the hierarchy structure of
+  tests directory in standard testing framework
+- [`run_coverage()`](run_coverage.md) : Run covr and potentially save
+  results to disk
+- [`run_covr_modes()`](run_covr_modes.md) : Run Coverage Analysis with
+  Test Detection
+- [`run_covr_skip_bioc_nstf()`](run_covr_skip_bioc_nstf.md) : Run
+  coverage with skip detection for Bioconductor RUnit-based packages
+- [`run_covr_skip_nstf()`](run_covr_skip_nstf.md) : Run Coverage
+  Analysis on Package Source and Tests
+- [`run_covr_skip_stf()`](run_covr_skip_stf.md) : Run covr with failing
+  tests \#' This function runs test coverage and skip analysis for a
+  package using testthat or other supported frameworks.
+- [`set_up_pkg()`](set_up_pkg.md) : Creates information on package
+  installation
+
+# Articles
+
+### All vignettes
+
+- [Examples](examples.md):
