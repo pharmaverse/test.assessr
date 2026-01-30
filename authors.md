@@ -16,7 +16,7 @@
 ## Citation
 
 Source:
-[`DESCRIPTION`](https://github.com/Sanofi-GitHub/test.assessr/blob/main/DESCRIPTION)
+[`DESCRIPTION`](https://github.com/Sanofi-GitHub/test.assessr/blob/1.0.0/DESCRIPTION)
 
 Gillian E, Bottois H, Charliquart P, Couturier A (2026). *test.assessr:
 Assessing Package Test Reliability and Quality*. R package version
