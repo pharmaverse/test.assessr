@@ -1,0 +1,278 @@
+---
+title: "&nbsp;"
+output:
+  rmarkdown::html_document:
+  css: www/styles.css
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "man/figures/",
+  out.width = "100%"
+)
+
+# Suppress package loading messages
+suppressMessages({
+  library(dplyr)
+  library(kableExtra)
+  library(knitr)
+})
+
+suppressWarnings({
+  library(htmltools)
+  library(htmlwidgets)
+})
+```
+
+# Package Test Report for `r get('pkg_name', envir = report_env)` version `r get('pkg_version', envir = report_env)` <a><img src="`r system.file('man/figures/test_assessr.png', package = 'test.assessr')`" align="right" height="100" /><br></a>
+
+
+
+```{r test_summary, echo=FALSE}
+library(knitr)
+library(kableExtra)
+
+test_summary_output <- get("test_pkg_summary_output", envir = report_env)
+
+# Render the table using knitr and kableExtra
+test_summary_output_html <- knitr::kable(test_summary_output,
+                                         col.names = c("Type", "Values"),
+                                         format = "html") %>%
+  kableExtra::kable_styling("striped", 
+                            position = "left", 
+                            font_size = 12) %>%
+  kableExtra::row_spec(0, 
+                       bold = TRUE,
+                       italic = TRUE,
+                       background = "green") %>%
+  kableExtra::add_header_above(c("Test Assessment Summary" = 2), 
+                               bold = TRUE, 
+                               background = "green", 
+                               color = "black")
+
+# Apply conditional formatting based on Risk Profile values
+test_summary_output_html <- test_summary_output_html %>%
+  kableExtra::row_spec(which(test_summary_output$Value == "Low"), background = "green") %>%
+  kableExtra::row_spec(which(test_summary_output$Value == "Medium"), background = "yellow") %>%
+  kableExtra::row_spec(which(test_summary_output$Value == "High"), background = "red")
+
+
+# Display the table
+test_summary_output_html
+```   
+
+```{r test_details, echo=FALSE, message=FALSE, warning=FALSE}
+library(knitr)
+library(kableExtra)
+library(dplyr)
+test_details_output <- get("test_details_output", envir = report_env)
+
+# Select only the columns to display in the table
+test_details_output_display <- test_details_output %>%
+  select(Metric, Value)
+
+# Display df
+test_details_output_html <- knitr::kable((test_details_output_display),
+                               col.names = c(
+                                 "Type",
+                                 "Details"),
+                          "html")
+kableExtra::kable_styling(test_details_output_html, 
+                          "striped", 
+                          position = "left", 
+                          font_size = 12) %>%
+  kableExtra::row_spec(0, 
+                       bold = TRUE,
+                       italic = TRUE,
+                       background = "green"
+                               ) %>%
+  kableExtra::add_header_above(c("Test Assessment Run Details" = 2), bold = TRUE, background = "green", color = "black")
+```   
+
+
+```{r test_coverage, echo=FALSE}
+library(knitr)
+library(kableExtra)
+
+coverage_output <- get("coverage_output", envir = report_env)
+
+colnames(coverage_output) <- c("Function", "Coverage", "Errors", "Notes")
+
+
+# Get the column indices based on the column names
+errors_col <- which(names(coverage_output) == "Errors")
+notes_col <- which(names(coverage_output) == "Notes")
+
+# Render the table using knitr and kableExtra
+# Display df
+coverage_output_html_DT <- DT::datatable(coverage_output, 
+                                         rownames = FALSE, 
+                                         colnames = c("Function", "Coverage", "Errors", "Notes"),
+                                         options = list(
+                                           pageLength = 10,  # Number of rows to display per page
+                                           lengthMenu = c(10, 20, 50),  # Options for number of rows per page
+                                           search = list(search = ""),  # Enable search functionality
+                                           dom = 'Bfrtip',  # Include buttons, filter, and pagination
+                                           buttons = c('copy', 'csv', 'excel', 'pdf', 'print')  # Export buttons
+                                         ))
+
+# Apply styling
+coverage_output_html_DT <- coverage_output_html_DT %>%
+  DT::formatStyle(
+    columns = 'Errors',
+    backgroundColor = DT::styleEqual(
+      levels = c("No testthat or testit configuration", "No test coverage errors", "Other Value"),
+      values = c("red", "green", "red")
+
+    )
+  ) %>%
+  DT::formatStyle(
+    columns = 'Notes',
+    backgroundColor = DT::styleEqual(
+      levels = c("No test coverage notes", "Other Value"),
+      values = c("green", "yellow")
+    )
+  )
+
+# Render the datatable with a custom header
+htmltools::tagList(
+  htmltools::tags$h2("Test Coverage", style = "font-weight: bold; background-color: green; color: black; text-align: center;"),
+  coverage_output_html_DT
+)
+
+# Render the datatable
+# coverage_output_html_DT
+```
+
+```{r, echo=FALSE, results='asis'}
+cat('
+<div style="margin-bottom: 20px;">
+  <label for="matrixSelector" style="
+    background-color: purple;
+    color: white;
+    font-size: 20px;
+    font-weight: bold;
+    padding: 10px;
+    border-radius: 5px;
+    display: inline-block;
+    margin-bottom: 10px;
+  ">
+    Select Standard Test Type:
+  </label>
+  <select id="matrixSelector" onchange="toggleMatrix(this.value)" style="
+    margin-left: 10px;
+    padding: 6px;
+    font-size: 18px;
+    border-radius: 4px;
+  ">
+    <option value="long_summary">Tests Passed</option>
+    <option value="tests_skip">Tests Skipped</option>
+  </select>
+</div>
+
+<script>
+  function toggleMatrix(value) {
+    document.getElementById("long_summary").style.display = (value === "long_summary") ? "block" : "none";
+    document.getElementById("tests_skip").style.display = (value === "tests_skip") ? "block" : "none";
+  }
+
+  document.addEventListener("DOMContentLoaded", function() {
+    toggleMatrix("long_summary");
+  });
+</script>
+')
+```
+
+```{r tests_passed_df, echo=FALSE}
+library(knitr)
+library(kableExtra)
+library(DT)
+library(htmlwidgets)
+library(htmltools)
+library(stringr)
+
+long_summary <- get("long_summary_df", envir = report_env)
+
+if (!is.data.frame(long_summary) || nrow(long_summary) == 0) {
+    knitr::asis_output("")  # no output
+  } else {
+ 
+  # Optional: clean column names for display
+  colnames(long_summary) <- gsub("_", " ", colnames(long_summary))
+
+  # Build the datatable widget
+  long_summary_tbl <- DT::datatable(
+    long_summary,
+    options = list(
+      pageLength = 10,
+      lengthMenu = c(10, 20, 50),
+      dom = 'Bfrtip'
+    ),
+    colnames = c(
+      "R function",
+      "Test",
+      "Test Block start line",
+      "Test Status"
+    ),
+    caption = htmltools::tags$caption(
+      style = "caption-side: top; text-align: left;",
+      htmltools::tags$strong(
+        htmltools::tags$u("Passing Tests")
+      )
+    ),
+    rownames = FALSE
+  )
+
+  # Wrap in a div for JS toggling and render inline
+  tagAppendChild(
+    tags$div(id = "long_summary", style = "display:block;"),
+    long_summary_tbl
+  )
+}
+
+
+```
+
+```{r skipped_tests_df, echo=FALSE}
+library(knitr)
+library(kableExtra)
+library(DT)
+library(htmlwidgets)
+library(htmltools)
+library(stringr)
+
+tests_skip_df <- get("tests_skip_df", envir = report_env)
+
+tests_skip_tbl <- DT::datatable(
+  tests_skip_df,
+  options = list(pageLength = 10, 
+                 lengthMenu = c(10, 20, 50), 
+                 dom = 'Bfrtip'),
+  colnames = c(
+      "R function",
+      "Test",
+      "Test Status",
+      "Expectation type",
+      "Test Block start line"
+  ),
+  caption = htmltools::tags$caption(
+    # optional: inline CSS if you want
+    style = "caption-side: top; text-align: left;",
+    htmltools::tags$strong(
+      htmltools::tags$u("Skipped Tests")
+    )
+  )
+
+)
+
+# Print the datatable inside a div for toggling
+htmltools::tags$div(
+  id = "tests_skip",  
+  tests_skip_tbl 
+)
+
+```

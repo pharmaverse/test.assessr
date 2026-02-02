@@ -1,0 +1,51 @@
+Package: test.assessr
+Title: Assessing Package Test Reliability and Quality
+Version: 1.0.0
+Authors@R: c(
+    person("Edward", "Gillian", , "edward.gillian-ext@sanofi.com", role = c("cre", "aut"), comment = c(ORCID = "0000-0003-2732-5107")),
+    person("Hugo", "Bottois", , "hugo.bottois@sanofi.com", role = "aut", comment = c(ORCID = "0000-0003-4674-0875")),
+    person("Paulin", "Charliquart", , "paulin.charliquart@sanofi.com", role = "aut"),
+    person("Andre", "Couturier", , "andre.couturier@sanofi.com", role = "aut"),
+    person("Sanofi", role = c("cph", "fnd")))
+Description: A reliable and validated tool that calculates unit test coverage 
+    for R packages with standard testing frameworks and non-standard testing frameworks.
+License: GPL (>= 2)
+BugReports: https://github.com/Sanofi-Public/test.assessr/issues
+Depends: 
+  R (>= 4.1.0)
+Imports:
+  callr,
+  checkmate,
+  covr,
+  dplyr,
+  fs,
+  jsonlite,
+  pkgload,
+  remotes,
+  rlang,
+  rmarkdown,
+  RUnit,
+  stringr,
+  testthat (>= 3.0.0),
+  tidyr,
+  utils, 
+  withr
+Suggests:
+  devtools,
+  DT,
+  here,
+  kableExtra,
+  knitr,
+  methods,
+  R6,
+  S7,
+  roxygen2,
+  tidyselect,
+  tools,
+  mockery
+Encoding: UTF-8
+LazyData: true
+RoxygenNote: 7.3.3
+Config/testthat/edition: 3
+Config/build/clean-inst-doc: false
+VignetteBuilder: knitr

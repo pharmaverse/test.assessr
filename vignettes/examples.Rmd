@@ -1,0 +1,29 @@
+---
+title: "Examples"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Examples}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r load, echo=FALSE}
+library(test.assessr)
+```
+
+Run package coverage for a package
+
+```{r pkg_covr, echo=FALSE, eval=FALSE}
+dp <- system.file("test-data", "test.package.0001_0.1.0.tar.gz",
+                 package = "test.assessr")
+
+
+test_package <- get_package_coverage(dp)
+
+
+test_package
+```
