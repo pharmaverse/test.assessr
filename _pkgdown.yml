@@ -1,0 +1,40 @@
+
+template:
+  bootstrap: 5
+development:
+  mode: release
+output:
+  assets:
+    - inst/examples/
+articles:
+  - title: How to start
+    contents:
+      - How_to_Start
+  - title: Testing frameworks
+    contents:
+      - STF_Testing_Frameworks
+      - NSTF_Testing_Frameworks
+      - Generate_Test_Report
+navbar:
+  structure:
+    left:
+      - home
+      - reference
+      - how_to_start
+      - articles
+  components:
+    home:
+      text: "Home"
+      href: index.html
+    how_to_start:
+      text: "How to start"
+      href: articles/How_to_Start.html
+    articles:
+      text: "Articles"
+      menu:
+        - text: "STF Testing Frameworks"
+          href: articles/STF_Testing_Frameworks.html
+        - text: "NSTF Testing Frameworks"
+          href: articles/NSTF_Testing_Frameworks.html
+        - text: "Generate Test Report"
+          href: articles/Generate_Test_Report.html

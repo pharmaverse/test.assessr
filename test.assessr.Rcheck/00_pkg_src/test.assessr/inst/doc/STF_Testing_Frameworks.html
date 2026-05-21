@@ -1,0 +1,953 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+<meta charset="utf-8" />
+<meta name="generator" content="pandoc" />
+<meta http-equiv="X-UA-Compatible" content="IE=EDGE" />
+
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+
+
+
+<title>STF Testing Frameworks</title>
+
+<script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
+// be compatible with the behavior of Pandoc < 2.8).
+document.addEventListener('DOMContentLoaded', function(e) {
+  var hs = document.querySelectorAll("div.section[class*='level'] > :first-child");
+  var i, h, a;
+  for (i = 0; i < hs.length; i++) {
+    h = hs[i];
+    if (!/^h[1-6]$/i.test(h.tagName)) continue;  // it should be a header h1-h6
+    a = h.attributes;
+    while (a.length > 0) h.removeAttribute(a[0].name);
+  }
+});
+</script>
+
+<style type="text/css">
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+span.underline{text-decoration: underline;}
+div.column{display: inline-block; vertical-align: top; width: 50%;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+</style>
+
+
+
+
+
+
+
+<style type="text/css">body {
+background-color: #fff;
+margin: 1em auto;
+max-width: 700px;
+overflow: visible;
+padding-left: 2em;
+padding-right: 2em;
+font-family: "Open Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+font-size: 14px;
+line-height: 1.35;
+}
+#TOC {
+clear: both;
+margin: 0 0 10px 10px;
+padding: 4px;
+width: 400px;
+border: 1px solid #CCCCCC;
+border-radius: 5px;
+background-color: #f6f6f6;
+font-size: 13px;
+line-height: 1.3;
+}
+#TOC .toctitle {
+font-weight: bold;
+font-size: 15px;
+margin-left: 5px;
+}
+#TOC ul {
+padding-left: 40px;
+margin-left: -1.5em;
+margin-top: 5px;
+margin-bottom: 5px;
+}
+#TOC ul ul {
+margin-left: -2em;
+}
+#TOC li {
+line-height: 16px;
+}
+table {
+margin: 1em auto;
+border-width: 1px;
+border-color: #DDDDDD;
+border-style: outset;
+border-collapse: collapse;
+}
+table th {
+border-width: 2px;
+padding: 5px;
+border-style: inset;
+}
+table td {
+border-width: 1px;
+border-style: inset;
+line-height: 18px;
+padding: 5px 5px;
+}
+table, table th, table td {
+border-left-style: none;
+border-right-style: none;
+}
+table thead, table tr.even {
+background-color: #f7f7f7;
+}
+p {
+margin: 0.5em 0;
+}
+blockquote {
+background-color: #f6f6f6;
+padding: 0.25em 0.75em;
+}
+hr {
+border-style: solid;
+border: none;
+border-top: 1px solid #777;
+margin: 28px 0;
+}
+dl {
+margin-left: 0;
+}
+dl dd {
+margin-bottom: 13px;
+margin-left: 13px;
+}
+dl dt {
+font-weight: bold;
+}
+ul {
+margin-top: 0;
+}
+ul li {
+list-style: circle outside;
+}
+ul ul {
+margin-bottom: 0;
+}
+pre, code {
+background-color: #f7f7f7;
+border-radius: 3px;
+color: #333;
+white-space: pre-wrap; 
+}
+pre {
+border-radius: 3px;
+margin: 5px 0px 10px 0px;
+padding: 10px;
+}
+pre:not([class]) {
+background-color: #f7f7f7;
+}
+code {
+font-family: Consolas, Monaco, 'Courier New', monospace;
+font-size: 85%;
+}
+p > code, li > code {
+padding: 2px 0px;
+}
+div.figure {
+text-align: center;
+}
+img {
+background-color: #FFFFFF;
+padding: 2px;
+border: 1px solid #DDDDDD;
+border-radius: 3px;
+border: 1px solid #CCCCCC;
+margin: 0 5px;
+}
+h1 {
+margin-top: 0;
+font-size: 35px;
+line-height: 40px;
+}
+h2 {
+border-bottom: 4px solid #f7f7f7;
+padding-top: 10px;
+padding-bottom: 2px;
+font-size: 145%;
+}
+h3 {
+border-bottom: 2px solid #f7f7f7;
+padding-top: 10px;
+font-size: 120%;
+}
+h4 {
+border-bottom: 1px solid #f7f7f7;
+margin-left: 8px;
+font-size: 105%;
+}
+h5, h6 {
+border-bottom: 1px solid #ccc;
+font-size: 105%;
+}
+a {
+color: #0033dd;
+text-decoration: none;
+}
+a:hover {
+color: #6666ff; }
+a:visited {
+color: #800080; }
+a:visited:hover {
+color: #BB00BB; }
+a[href^="http:"] {
+text-decoration: underline; }
+a[href^="https:"] {
+text-decoration: underline; }
+
+code > span.kw { color: #555; font-weight: bold; } 
+code > span.dt { color: #902000; } 
+code > span.dv { color: #40a070; } 
+code > span.bn { color: #d14; } 
+code > span.fl { color: #d14; } 
+code > span.ch { color: #d14; } 
+code > span.st { color: #d14; } 
+code > span.co { color: #888888; font-style: italic; } 
+code > span.ot { color: #007020; } 
+code > span.al { color: #ff0000; font-weight: bold; } 
+code > span.fu { color: #900; font-weight: bold; } 
+code > span.er { color: #a61717; background-color: #e3d2d2; } 
+</style>
+
+
+
+
+</head>
+
+<body>
+
+
+
+
+<h1 class="title toc-ignore">STF Testing Frameworks</h1>
+
+
+
+<p>The <code>test.assessr</code> package checks package structure and
+test drivers to detect and classify testing configurations.</p>
+<p>If it detects a standard testing framework (STF)
+(i.e. <code>testthat</code> or <code>testit</code>), it runs a standard
+testing workflow involving a number of steps:</p>
+<p><code>Step 1</code></p>
+<ul>
+<li><p>run <code>callr::r_safe</code> which calls
+<code>covr::package_coverage</code>.</p></li>
+<li><p>The <code>r_safe</code> function has the parameter
+<code>error = &quot;error&quot;</code>.</p></li>
+<li><p>This means if <code>package_coverage</code> encounters an error,
+then <code>r_safe</code> returns an error to the main testing
+process.</p></li>
+<li><p>If <code>Step 1</code> is successful, then a unit test data
+coverage object like this is produced:</p></li>
+</ul>
+<p><code>Step 1 unit test data coverage object</code></p>
+<table>
+<colgroup>
+<col width="21%" />
+<col width="13%" />
+<col width="24%" />
+<col width="24%" />
+<col width="16%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>R object</th>
+<th>field</th>
+<th>element 1</th>
+<th>element 2</th>
+<th>value</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>test_package</td>
+<td>pkg_name</td>
+<td></td>
+<td></td>
+<td>“test.package.0001”</td>
+</tr>
+<tr class="even">
+<td></td>
+<td>pkg_ver</td>
+<td></td>
+<td></td>
+<td>“0.1.0”</td>
+</tr>
+<tr class="odd">
+<td></td>
+<td>date_time</td>
+<td></td>
+<td></td>
+<td>“2026-03-09 14:27:36.673915”</td>
+</tr>
+<tr class="even">
+<td></td>
+<td>executor</td>
+<td></td>
+<td></td>
+<td>“xxxxxxx”</td>
+</tr>
+<tr class="odd">
+<td></td>
+<td>sysname</td>
+<td></td>
+<td></td>
+<td>“Linux”</td>
+</tr>
+<tr class="even">
+<td></td>
+<td>version</td>
+<td></td>
+<td></td>
+<td>“#1 SMP PREEMPT_DYNAMIC Mon Dec 1 05:36:50 UTC 2025”</td>
+</tr>
+<tr class="odd">
+<td></td>
+<td>release</td>
+<td></td>
+<td></td>
+<td>“6.1.158-180.294.amzn2023.x86_64”</td>
+</tr>
+<tr class="even">
+<td></td>
+<td>machine</td>
+<td></td>
+<td></td>
+<td>“x86_64”</td>
+</tr>
+<tr class="odd">
+<td></td>
+<td>r_version</td>
+<td></td>
+<td></td>
+<td>“4.4.1”</td>
+</tr>
+<tr class="even">
+<td></td>
+<td>test_framework_type</td>
+<td></td>
+<td></td>
+<td>standard testing framework</td>
+</tr>
+<tr class="odd">
+<td></td>
+<td>total_cov</td>
+<td></td>
+<td></td>
+<td>1</td>
+</tr>
+<tr class="even">
+<td></td>
+<td>res_cov</td>
+<td>name</td>
+<td></td>
+<td>“test.package.0001”</td>
+</tr>
+<tr class="odd">
+<td></td>
+<td></td>
+<td>coverage</td>
+<td>filecoverage</td>
+<td>R/myscript.R 100</td>
+</tr>
+<tr class="even">
+<td></td>
+<td></td>
+<td></td>
+<td>totalcoverage</td>
+<td>100</td>
+</tr>
+<tr class="odd">
+<td></td>
+<td>errors</td>
+<td></td>
+<td></td>
+<td>NA</td>
+</tr>
+<tr class="even">
+<td></td>
+<td>notes</td>
+<td></td>
+<td></td>
+<td>NA</td>
+</tr>
+</tbody>
+</table>
+<p><code>Step 2</code></p>
+<ul>
+<li><p>run <code>setup_covr_env</code> which</p>
+<ul>
+<li>loads helper files from <code>tests/testthat</code>,</li>
+<li>loads package namespace objects into <code>cov_env</code>,</li>
+<li>resolves the project root,</li>
+<li>loads package datasets into <code>cov_env</code>,</li>
+<li>loads Base R datasets and exports into <code>cov_env</code>,</li>
+<li>optionally loads <code>nycflights13</code> datasets if
+available,</li>
+<li>loads dependencies into <code>cov_env</code>, and</li>
+<li>unloads the package namespace afterward to reduce conflicts.</li>
+</ul></li>
+<li><p>run <code>create fail reporter</code> to find failing
+tests</p></li>
+<li><p>run <code>create test reporter</code> to create a reporter for
+all tests</p></li>
+<li><p>map <code>exported functions</code> to test files</p></li>
+<li><p>create a filter for test status i.e. tests that have
+<code>&quot;FAILED&quot;, &quot;ERROR&quot;, &quot;SKIPPED&quot;</code></p></li>
+<li><p>identify tests to be skipped based on status</p></li>
+<li><p>comment out tests to be skipped</p></li>
+<li><p>run <code>covr::environment_coverage</code> on remaining test
+files.</p></li>
+<li><p>If <code>Step 2</code> is successful, then a unit test data
+coverage object like this is produced:</p></li>
+</ul>
+<p><code>Step 2 unit test data coverage object</code></p>
+<table>
+<colgroup>
+<col width="21%" />
+<col width="13%" />
+<col width="24%" />
+<col width="24%" />
+<col width="16%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>R object</th>
+<th>field</th>
+<th>element 1</th>
+<th>element 2</th>
+<th>value</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>test_package</td>
+<td>pkg_name</td>
+<td></td>
+<td></td>
+<td>“test.package.0003”</td>
+</tr>
+<tr class="even">
+<td></td>
+<td>pkg_ver</td>
+<td></td>
+<td></td>
+<td>“0.1.0”</td>
+</tr>
+<tr class="odd">
+<td></td>
+<td>date_time</td>
+<td></td>
+<td></td>
+<td>“2026-04-09 10:17:27.71564”</td>
+</tr>
+<tr class="even">
+<td></td>
+<td>executor</td>
+<td></td>
+<td></td>
+<td>“xxxxxxx”</td>
+</tr>
+<tr class="odd">
+<td></td>
+<td>sysname</td>
+<td></td>
+<td></td>
+<td>“Linux”</td>
+</tr>
+<tr class="even">
+<td></td>
+<td>version</td>
+<td></td>
+<td></td>
+<td>“#1 SMP PREEMPT_DYNAMIC Mon Dec 1 05:36:50 UTC 2025”</td>
+</tr>
+<tr class="odd">
+<td></td>
+<td>release</td>
+<td></td>
+<td></td>
+<td>“6.1.158-180.294.amzn2023.x86_64”</td>
+</tr>
+<tr class="even">
+<td></td>
+<td>machine</td>
+<td></td>
+<td></td>
+<td>“x86_64”</td>
+</tr>
+<tr class="odd">
+<td></td>
+<td>r_version</td>
+<td></td>
+<td></td>
+<td>“4.4.1”</td>
+</tr>
+<tr class="even">
+<td></td>
+<td>test_framework_type</td>
+<td></td>
+<td></td>
+<td>standard testing framework</td>
+</tr>
+<tr class="odd">
+<td></td>
+<td>total_cov</td>
+<td></td>
+<td></td>
+<td>0</td>
+</tr>
+<tr class="even">
+<td></td>
+<td>res_cov</td>
+<td>name</td>
+<td></td>
+<td>“test.package.0003”</td>
+</tr>
+<tr class="odd">
+<td></td>
+<td></td>
+<td>coverage</td>
+<td>filecoverage</td>
+<td>num [1(1d)] 0</td>
+</tr>
+<tr class="even">
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td>attr(*, “dimnames”)=List of 1 chr “myscript.R”</td>
+</tr>
+<tr class="odd">
+<td></td>
+<td></td>
+<td></td>
+<td>totalcoverage</td>
+<td>0</td>
+</tr>
+<tr class="even">
+<td></td>
+<td>errors</td>
+<td></td>
+<td></td>
+<td>NA</td>
+</tr>
+<tr class="odd">
+<td></td>
+<td>notes</td>
+<td></td>
+<td></td>
+<td>NA</td>
+</tr>
+<tr class="even">
+<td>long_summary</td>
+<td>file</td>
+<td></td>
+<td></td>
+<td>“test-myscript.R#L2_L2”</td>
+</tr>
+<tr class="odd">
+<td></td>
+<td>code_script</td>
+<td></td>
+<td></td>
+<td>“myscript”</td>
+</tr>
+<tr class="even">
+<td></td>
+<td>context</td>
+<td></td>
+<td></td>
+<td>“this works”</td>
+</tr>
+<tr class="odd">
+<td></td>
+<td>status</td>
+<td></td>
+<td></td>
+<td>“FAILED”</td>
+</tr>
+<tr class="even">
+<td></td>
+<td>n</td>
+<td></td>
+<td></td>
+<td>1</td>
+</tr>
+<tr class="odd">
+<td></td>
+<td>time</td>
+<td></td>
+<td></td>
+<td>0.291</td>
+</tr>
+<tr class="even">
+<td>test_skip</td>
+<td>file</td>
+<td></td>
+<td></td>
+<td>“test-myscript.R”</td>
+</tr>
+<tr class="odd">
+<td></td>
+<td>code_script</td>
+<td></td>
+<td></td>
+<td>“myscript”</td>
+</tr>
+<tr class="even">
+<td></td>
+<td>context</td>
+<td></td>
+<td></td>
+<td>“this works”</td>
+</tr>
+<tr class="odd">
+<td></td>
+<td>status</td>
+<td></td>
+<td></td>
+<td>“FAILED”</td>
+</tr>
+<tr class="even">
+<td></td>
+<td>n</td>
+<td></td>
+<td></td>
+<td>1</td>
+</tr>
+<tr class="odd">
+<td></td>
+<td>time</td>
+<td></td>
+<td></td>
+<td>0.291</td>
+</tr>
+<tr class="even">
+<td></td>
+<td>expectation:</td>
+<td></td>
+<td></td>
+<td>“expect_equal”</td>
+</tr>
+<tr class="odd">
+<td></td>
+<td>line1</td>
+<td></td>
+<td></td>
+<td>2</td>
+</tr>
+<tr class="even">
+<td></td>
+<td>line2</td>
+<td></td>
+<td></td>
+<td>2</td>
+</tr>
+</tbody>
+</table>
+<p>This data object differs from <code>Step 1 data object</code> in that
+it gives information about which tests/test blocks were skipped and the
+status tells the user why they were skipped.</p>
+<p><code>Step 3</code></p>
+<ul>
+<li><p>run <code>withr::with_dir</code> which calls
+<code>covr::package_coverage</code>.</p></li>
+<li><p><code>covr::package_coverage</code> has the parameters
+<code>type = &quot;tests&quot;, quiet = TRUE</code></p></li>
+<li><p>If <code>Step 3</code> is successful, then a unit test data
+coverage object like this is produced:</p></li>
+</ul>
+<p><code>Step 3 unit test data coverage object</code></p>
+<table>
+<colgroup>
+<col width="21%" />
+<col width="13%" />
+<col width="24%" />
+<col width="24%" />
+<col width="16%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>R object</th>
+<th>field</th>
+<th>element 1</th>
+<th>element 2</th>
+<th>value</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>test_package</td>
+<td>pkg_name</td>
+<td></td>
+<td></td>
+<td>“dplyr”</td>
+</tr>
+<tr class="even">
+<td></td>
+<td>pkg_ver</td>
+<td></td>
+<td></td>
+<td>“1.1.4”</td>
+</tr>
+<tr class="odd">
+<td></td>
+<td>date_time</td>
+<td></td>
+<td></td>
+<td>“2026-04-09 10:17:27.71564”</td>
+</tr>
+<tr class="even">
+<td></td>
+<td>executor</td>
+<td></td>
+<td></td>
+<td>“xxxxxxx”</td>
+</tr>
+<tr class="odd">
+<td></td>
+<td>sysname</td>
+<td></td>
+<td></td>
+<td>“Linux”</td>
+</tr>
+<tr class="even">
+<td></td>
+<td>version</td>
+<td></td>
+<td></td>
+<td>“#1 SMP PREEMPT_DYNAMIC Mon Dec 1 05:36:50 UTC 2025”</td>
+</tr>
+<tr class="odd">
+<td></td>
+<td>release</td>
+<td></td>
+<td></td>
+<td>“6.1.158-180.294.amzn2023.x86_64”</td>
+</tr>
+<tr class="even">
+<td></td>
+<td>machine</td>
+<td></td>
+<td></td>
+<td>“x86_64”</td>
+</tr>
+<tr class="odd">
+<td></td>
+<td>r_version</td>
+<td></td>
+<td></td>
+<td>“4.4.1”</td>
+</tr>
+<tr class="even">
+<td></td>
+<td>test_framework_type</td>
+<td></td>
+<td></td>
+<td>standard testing framework</td>
+</tr>
+<tr class="odd">
+<td></td>
+<td>total_cov</td>
+<td></td>
+<td></td>
+<td>0</td>
+</tr>
+<tr class="even">
+<td></td>
+<td>res_cov</td>
+<td>name</td>
+<td></td>
+<td>“dplyr”</td>
+</tr>
+<tr class="odd">
+<td></td>
+<td></td>
+<td>coverage</td>
+<td>filecoverage</td>
+<td>num [1:109(1d)] 98.3 76.7 97.5 100 100 …</td>
+</tr>
+<tr class="even">
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td>attr(*, “dimnames”)=List of 1 [1:109] “across.R” “all-equal.R”
+“arrange.R” “bind-cols.R” …</td>
+</tr>
+<tr class="odd">
+<td></td>
+<td></td>
+<td></td>
+<td>totalcoverage</td>
+<td>0.907</td>
+</tr>
+<tr class="even">
+<td></td>
+<td>errors</td>
+<td></td>
+<td></td>
+<td>NA</td>
+</tr>
+<tr class="odd">
+<td></td>
+<td>notes</td>
+<td></td>
+<td></td>
+<td>NA</td>
+</tr>
+<tr class="even">
+<td>long_summary</td>
+<td>file</td>
+<td></td>
+<td></td>
+<td>[1:3432] “test-across.R#L7_L7” “test-across.R#L14_L14”
+“test-across.R#L20_L20” “test-across.R#L24_L24” …</td>
+</tr>
+<tr class="odd">
+<td></td>
+<td>code_script</td>
+<td></td>
+<td></td>
+<td>[1:3432] “across” “across” “across” “across” …</td>
+</tr>
+<tr class="even">
+<td></td>
+<td>context</td>
+<td></td>
+<td></td>
+<td>[1:3432] “across() works on one column data.frame” “across() does
+not select grouping variables” “across() corre”</td>
+</tr>
+<tr class="odd">
+<td></td>
+<td>status</td>
+<td></td>
+<td></td>
+<td>[1:3432] “PASS” “PASS” “PASS” “PASS” …</td>
+</tr>
+<tr class="even">
+<td></td>
+<td>n</td>
+<td></td>
+<td></td>
+<td>[1:3432] 1 1 1 1 1 1 1 1 1 1 …</td>
+</tr>
+<tr class="odd">
+<td></td>
+<td>time</td>
+<td></td>
+<td></td>
+<td>[1:3432] 0.041 0.014 0.077 0.077 0.077 …</td>
+</tr>
+<tr class="even">
+<td>test_skip</td>
+<td>file</td>
+<td></td>
+<td></td>
+<td>[1:448] “test-across.R” “test-across.R” “test-across.R”
+“test-across.R” …</td>
+</tr>
+<tr class="odd">
+<td></td>
+<td>code_script</td>
+<td></td>
+<td></td>
+<td>[1:448] “across” “across” “across” “across” …</td>
+</tr>
+<tr class="even">
+<td></td>
+<td>context</td>
+<td></td>
+<td></td>
+<td>“across() gives meaningful messages” “across() gives meaningful
+messages” “across() gives meaningful mes”</td>
+</tr>
+<tr class="odd">
+<td></td>
+<td>status</td>
+<td></td>
+<td></td>
+<td>[1:448] “FAILED” “FAILED” “FAILED” “FAILED” …</td>
+</tr>
+<tr class="even">
+<td></td>
+<td>n</td>
+<td></td>
+<td></td>
+<td>[1:448] 1 1 1 1 1 1 1 1 1 1 …</td>
+</tr>
+<tr class="odd">
+<td></td>
+<td>time</td>
+<td></td>
+<td></td>
+<td>[1:448] 2.03 2.03 2.03 2.03 2.03 …</td>
+</tr>
+<tr class="even">
+<td></td>
+<td>expectation</td>
+<td></td>
+<td></td>
+<td>[1:448] “expect_snapshot” “expect_error” “expect_error”
+“expect_error” …</td>
+</tr>
+<tr class="odd">
+<td></td>
+<td>line1</td>
+<td></td>
+<td></td>
+<td>[1:448] 209 212 216 222 226 230 234 238 243 244 …</td>
+</tr>
+<tr class="even">
+<td></td>
+<td>line2</td>
+<td></td>
+<td></td>
+<td>[1:448] 280 215 219 225 229 233 237 241 243 244 …</td>
+</tr>
+</tbody>
+</table>
+<p>Both <code>Step 2 unit test data coverage object</code> and
+<code>Step 3 unit test data coverage object</code> give the user details
+about the status of the tests <code>FAILED</code>, <code>PASSED</code>
+and <code>SKIPPED</code>.</p>
+<p>They also contain the test block start line (i.e. <code>line1</code>
+and <code>line2</code>) and the expectation type in the
+<code>expectation</code> column (e.g. <code>expect_snapshot</code>
+<code>expect_error</code>).</p>
+
+
+
+<!-- code folding -->
+
+
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+  (function () {
+    var script = document.createElement("script");
+    script.type = "text/javascript";
+    script.src  = "https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML";
+    document.getElementsByTagName("head")[0].appendChild(script);
+  })();
+</script>
+
+</body>
+</html>
