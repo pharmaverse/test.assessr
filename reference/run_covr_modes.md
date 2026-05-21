@@ -106,9 +106,9 @@ package_installed <- install_package_local(pkg_source_path)
 package_installed <- TRUE
 
 covr_mode_list <- run_covr_modes(pkg_source_path)
-#> Unloading test.package.0001 package to avoid coverage conflict...
 #> checking package test config
-#> running standard testing framework
+#> Unloading test.package.0001 package to avoid coverage conflict...
+#> decider: testthat -> run_coverage()
 #> running code coverage for test.package.0001
 #> code coverage for test.package.0001 successful
 #> Cleaning coverage workspace for test.package.0001

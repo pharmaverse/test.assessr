@@ -1,0 +1,104 @@
+# Generate Test Report
+
+## Introduction
+
+The [`generate_test_report()`](../reference/generate_test_report.md)
+function provides a unified way to generate HTML test assessment reports
+for R packages. It supports both standard testing frameworks (STF) and
+non-standard testing frameworks (NSTF) as well as single testing
+frameworks and multi‑framework test setups, producing a structured
+report that combines test summaries, detailed results, and coverage
+information.
+
+## Step 1 - Run package coverage for a package
+
+Run the following code
+
+``` r
+dp <- system.file("test-data", "test.package.0001_0.1.0.tar.gz",
+                 package = "test.assessr")
+
+
+test_results <- get_package_coverage(dp)
+
+generate_test_report(
+  test_results,
+  output_dir = getwd()
+)
+```
+
+Important: `output_dir` is required. It must be an existing, writable
+directory, such as:
+
+[`getwd()`](https://rdrr.io/r/base/getwd.html) `"path/to/output_dir"`
+
+If output_dir is missing or invalid, the function will error.
+
+The generated HTML file will be written to output_dir. and named using
+the package name and version, for example:
+
+`test_report_mypackage_1.2.3.html`
+
+## What the Report Contains
+
+Regardless of setup, every report includes:
+
+- Package name and version
+- Execution metadata (platform, R version, date/time)
+- A package‑level summary of test status
+- Test coverage results
+- Detailed test results, per framework if applicable
+
+The function automatically normalizes input so that single‑ and
+multi‑framework results share the same report structure.
+
+## STF vs NSTF Reporting
+
+The report distinguishes between STF and NSTF testing frameworks and
+presents framework‑appropriate detail sections when available.
+
+## STF (Standard Testing Frameworks)
+
+STF results come from `testthat` and/or `testit` frameworks.
+
+When STF data are present, the report may include:
+
+- Long summaries of test outcomes
+- Detailed test skip reasons
+- expectation types
+- test block start lines
+
+These sections appear only when STF elements are detected, keeping
+reports concise when they are not relevant.
+
+See the `dplyr` test report in the `inst/examples` folder.
+
+## NSTF (Non‑Standard Testing Frameworks)
+
+NSTF reporting supports lighter‑weight or base‑R‑style testing
+approaches, such as:
+
+- RUnit
+- data.table
+- Manual or script‑based tests without rich metadata
+
+For NSTF frameworks, the report can include:
+
+- Functions with no associated tests
+- Lists of skipped tests
+- Lists of passing tests
+- File‑level context with shortened paths when needed for readability
+
+NSTF sections are generated only when relevant elements are present in
+test_results.
+
+See the `MASS` test report in the `inst/examples` folder.
+
+## Multi‑Framework Reports
+
+When test_results indicates a multi‑framework setup:
+
+- Each framework (e.g. testthat, covr, custom runners) gets its own
+  subsection
+- Coverage is reported per framework
+- STF and NSTF sections are evaluated independently per framework

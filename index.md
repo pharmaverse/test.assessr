@@ -1,6 +1,7 @@
 # test.assessr ![](reference/figures/test_assessr.png)
 
-![R-CMD-check](https://img.shields.io/badge/R%20CMD%20check-Passing-brightgreen.svg)![Coverage](https://img.shields.io/badge/coverage-96%25-brightgreen.svg)
+![R-CMD-check](https://img.shields.io/badge/R%20CMD%20check-Passing-brightgreen.svg)![Test
+Coverage](https://img.shields.io/badge/coverage-94%25-brightgreen.svg)![Pharmaverse](http://pharmaverse.org/shields/test.assessr.svg)
 
 # Overview
 
@@ -32,7 +33,7 @@ This package executes the following tasks:
   - Log into your `github` account
   - Go to the token settings URL using the [Token Settings
     URL](https://github.com/settings/tokens)
-    - (do not forget to add the SSH `Sanofi-Public` authorization)
+    - (do not forget to add the SSH `Sanofi-GitHub` authorization)
 
 - Create a `.Renviron` file with your GITHUBTOKEN as:
 

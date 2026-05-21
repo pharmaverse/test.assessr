@@ -10,7 +10,7 @@ base R tests under \`tests/\`, Bioconductor‑style tests in
 ## Usage
 
 ``` r
-run_covr_skip_nstf(pkg_source_path, test_pkg_data, cov_env)
+run_covr_skip_nstf(pkg_source_path, test_pkg_data, cov_env, framework = NULL)
 ```
 
 ## Arguments
@@ -31,6 +31,13 @@ run_covr_skip_nstf(pkg_source_path, test_pkg_data, cov_env)
 
   Environment that holds the temporary coverage workspace and shared
   state for the run.
+
+- framework:
+
+  Optional character. When provided (e.g. from `run_one_framework`),
+  restricts test paths to the framework-specific directory. Use when a
+  package has multiple frameworks (e.g. testthat + testit) to avoid
+  mixing paths across frameworks.
 
 ## Value
 
@@ -81,7 +88,11 @@ so that downstream reporting remains consistent across frameworks.
 
 ## See also
 
-Other nstf_utility: [`check_covr_skip_nstf()`](check_covr_skip_nstf.md),
+Other nstf_utility:
 [`check_covr_skip_testit()`](check_covr_skip_testit.md),
+[`create_base_tests_coverage()`](create_base_tests_coverage.md),
+[`create_nstf_covr_list()`](create_nstf_covr_list.md),
+[`create_tinytest_coverage()`](create_tinytest_coverage.md),
 [`get_nstf_test_path()`](get_nstf_test_path.md),
-[`get_source_test_mapping_nstf()`](get_source_test_mapping_nstf.md)
+[`get_source_test_mapping_nstf()`](get_source_test_mapping_nstf.md),
+[`restrict_test_paths_to_framework()`](restrict_test_paths_to_framework.md)

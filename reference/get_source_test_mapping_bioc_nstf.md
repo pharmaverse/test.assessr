@@ -7,7 +7,7 @@ Tightens filename and content-based matching; handles short names like
 ## Usage
 
 ``` r
-get_source_test_mapping_Bioc_nstf(pkg_source_path, test_dir)
+get_source_test_mapping_bioc_nstf(pkg_source_path, test_dir)
 ```
 
 ## Arguments

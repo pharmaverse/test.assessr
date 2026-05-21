@@ -2,9 +2,13 @@
 
 Remove mapping rows that point to run_unitTests.R
 
+Remove mapping rows that point to run_unitTests.R
+
 ## Usage
 
 ``` r
+remove_run_unitTests_mapping(mapping, test_pkg_data)
+
 remove_run_unitTests_mapping(mapping, test_pkg_data)
 ```
 
@@ -21,5 +25,7 @@ remove_run_unitTests_mapping(mapping, test_pkg_data)
   "/tmp/.../BiocGenerics/tests/run_unitTests.R".
 
 ## Value
+
+The filtered mapping data.frame with run_unitTests.R rows removed.
 
 The filtered mapping data.frame with run_unitTests.R rows removed.

@@ -1,10 +1,6 @@
-# Get Package Name for Display
+# get package name for display
 
-Extracts a display-friendly package name from either a file path or a
-filename. The function removes directory components (if present) and
-then returns the substring up to the first underscore or hyphen. This is
-useful for converting paths or tarball names into a clean package
-identifier.
+get package name for display
 
 ## Usage
 
@@ -16,22 +12,11 @@ get_pkg_name(input_string)
 
 - input_string:
 
-  Character string. A package filename or a path containing the filename
-  (e.g., `"mypkg_1.0.0.tar.gz"` or `"/path/to/mypkg_1.0.0.tar.gz"`).
+  \- string containing package name
 
 ## Value
 
-A character scalar containing the cleaned package name.
-
-The returned object is always of class `character` and corresponds to
-the portion of the filename before the first underscore or hyphen.
-
-## Output Meaning
-
-The value represents a human‑readable package name extracted from a file
-path or filename. It does not validate whether the extracted name
-corresponds to an installed or existing package—only that it conforms to
-the expected tarball naming convention.
+pkg_disp - package name for display
 
 ## Examples
 

@@ -8,7 +8,7 @@ available.
 ## Usage
 
 ``` r
-create_empty_covr_list(pkg_name, error_message)
+create_empty_covr_list(pkg_name, error_message, test_pkg_data = NULL)
 ```
 
 ## Arguments
@@ -20,6 +20,12 @@ create_empty_covr_list(pkg_name, error_message)
 - error_message:
 
   A character string describing the reason for the fallback.
+
+- test_pkg_data:
+
+  Optional list from
+  [`check_pkg_tests_and_snaps()`](check_pkg_tests_and_snaps.md); use
+  `NULL` when unavailable (default).
 
 ## Value
 

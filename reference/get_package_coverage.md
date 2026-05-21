@@ -5,14 +5,24 @@ simplified input to assess package for test coverage
 ## Usage
 
 ``` r
-get_package_coverage(path = NULL)
+get_package_coverage(path = NULL, package_installed = NULL)
 ```
 
 ## Arguments
 
 - path:
 
-  (optional) path of locally stored package source code
+  (optional) path to locally stored package source code. If
+  `package_installed = TRUE`, `path` must point to the unpacked local
+  package directory (the package root containing files such as
+  `DESCRIPTION`), not to a source tarball such as `.tar.gz`.
+
+- package_installed:
+
+  (optional) logical flag that controls local package installation. If
+  `TRUE`, `install_package_local` is skipped and `path` is used
+  directly. If `NULL` or `FALSE`, a local package installation is
+  attempted.
 
 ## Value
 
@@ -33,8 +43,9 @@ The resulting object can be printed, summarized, or passed to
 [`test.assessr::generate_test_report()`](generate_test_report.md) to
 produce a human-readable test coverage report.
 
-Returns `NULL` if the package cannot be installed or if the specified
-path does not exist.
+Returns `NULL` if the package cannot be installed, if
+`install_list$pkg_source_path` is missing/empty, or if the specified
+`path` does not exist.
 
 ## Examples
 
@@ -48,16 +59,17 @@ pkg_source_path <- system.file(
 )
 
 # Run get_package_coverage
-get_package_coverage <- get_package_coverage(pkg_source_path)
+pkg_test_coverage <- get_package_coverage(pkg_source_path)
 #> unpacking test.package.0001 locally
 #> unpacked test.package.0001 locally
 #> installing test.package.0001 locally
 #> test.package.0001 is already installed
-#> Unloading test.package.0001 package to avoid coverage conflict...
 #> checking package test config
-#> running standard testing framework
+#> Unloading test.package.0001 package to avoid coverage conflict...
+#> decider: testthat -> run_coverage()
 #> running code coverage for test.package.0001
 #> code coverage for test.package.0001 successful
 #> Cleaning coverage workspace for test.package.0001
+#> No safe roots found for orphan cleanup; skipping.
 # }
 ```

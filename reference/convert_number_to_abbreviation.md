@@ -7,7 +7,3 @@ Convert number to abbreviation
 ``` r
 convert_number_to_abbreviation(value)
 ```
-
-## Arguments
-
-- value:

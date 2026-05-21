@@ -6,7 +6,7 @@ and applies context fixes to ensure each test has a valid context.
 ## Usage
 
 ``` r
-create_test_reporter(test_path, pkg)
+create_test_reporter(test_path, pkg, cov_env)
 ```
 
 ## Arguments
@@ -18,6 +18,10 @@ create_test_reporter(test_path, pkg)
 - pkg:
 
   Character string specifying the package name.
+
+- cov_env:
+
+  environment covr environment.
 
 ## Value
 

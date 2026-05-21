@@ -16,15 +16,15 @@
 ## Citation
 
 Source:
-[`DESCRIPTION`](https://github.com/Sanofi-Public/test.assessr/blob/7-add-gh-pkdown/DESCRIPTION)
+[`DESCRIPTION`](https://github.com/Sanofi-Public/test.assessr/blob/HEAD/DESCRIPTION)
 
 Gillian E, Bottois H, Charliquart P, Couturier A (2026). *test.assessr:
 Assessing Package Test Reliability and Quality*. R package version
-1.1.1.
+2.1.1.
 
     @Manual{,
       title = {test.assessr: Assessing Package Test Reliability and Quality},
       author = {Edward Gillian and Hugo Bottois and Paulin Charliquart and Andre Couturier},
       year = {2026},
-      note = {R package version 1.1.1},
+      note = {R package version 2.1.1},
     }

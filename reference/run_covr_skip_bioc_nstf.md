@@ -8,7 +8,12 @@ packages that store tests in \`inst/unitTests\` or ship a
 ## Usage
 
 ``` r
-run_covr_skip_bioc_nstf(pkg_source_path, test_pkg_data, cov_env)
+run_covr_skip_bioc_nstf(
+  pkg_source_path,
+  test_pkg_data,
+  cov_env,
+  framework = NULL
+)
 ```
 
 ## Arguments
@@ -27,6 +32,13 @@ run_covr_skip_bioc_nstf(pkg_source_path, test_pkg_data, cov_env)
 
   Environment that holds the temporary coverage workspace and shared
   state for the run.
+
+- framework:
+
+  Optional character. When provided (e.g. from `run_one_framework`),
+  restricts test paths to the framework-specific directory. Use when a
+  package has multiple frameworks (e.g. testthat + testit) to avoid
+  mixing paths across frameworks.
 
 ## Value
 

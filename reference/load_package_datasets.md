@@ -8,18 +8,26 @@ environment. It first attempts to load \`.rda\` files from the package's
 ## Usage
 
 ``` r
-load_package_datasets(pkg_name, env = cov_env)
+load_package_datasets(pkg_names, env, source_paths = NULL, overwrite = FALSE)
 ```
 
 ## Arguments
 
-- pkg_name:
+- pkg_names:
 
   A character string specifying the name of the package.
 
 - env:
 
   A character string specifying the covr env
+
+- source_paths:
+
+  A character string specifying the source paths
+
+- overwrite:
+
+  A logical specifying whether datasets should be overwritten
 
 ## Value
 

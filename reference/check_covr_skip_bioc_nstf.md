@@ -7,7 +7,7 @@ and identifies any that produce warnings or errors. It does not handle
 ## Usage
 
 ``` r
-check_covr_skip_Bioc_nstf(pkg_source_path, mapping, test_path)
+check_covr_skip_bioc_nstf(pkg_source_path, mapping, test_path)
 ```
 
 ## Arguments
