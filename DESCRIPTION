@@ -9,7 +9,7 @@ Authors@R: c(
     person("Sanofi", role = c("cph", "fnd")))
 Description: A reliable and validated tool that calculates unit test coverage for R packages with standard testing frameworks and non-standard testing frameworks.
 License: GPL (>= 2)
-BugReports: https://github.com/Sanofi-Public/test.assessr/issues
+BugReports: https://github.com/pharmaverse/test.assessr/issues
 Depends: 
   R (>= 4.1.0)
 Imports:
@@ -51,3 +51,4 @@ Config/testthat/edition: 3
 Config/build/clean-inst-doc: false
 VignetteBuilder: knitr
 Config/roxygen2/version: 8.0.0
+RoxygenNote: 7.3.3

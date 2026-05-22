@@ -6,6 +6,9 @@
 \usage{
 convert_number_to_percent(value)
 }
+\arguments{
+\item{value}{}
+}
 \description{
 Convert number to percent
 }

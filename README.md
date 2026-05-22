@@ -31,7 +31,7 @@ This package executes the following tasks:
 
 # Package Installation
 
-## from [Github](https://github.com/Sanofi-Public/test.assessr)
+## from [Github](https://github.com/pharmaverse/test.assessr)
 
 -   Create a `Personal Access Token` (PAT) on `github`
 
@@ -55,7 +55,7 @@ GITHUBTOKEN=dfdxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxfdf
 
 ```         
 auth_token = Sys.getenv("GITHUBTOKEN")
-devtools::install_github("Sanofi-Public/test.assessr", ref = "main", auth_token = auth_token)
+devtools::install_github("pharmaverse/test.assessr", ref = "main", auth_token = auth_token)
 ```
 
 # Usage
