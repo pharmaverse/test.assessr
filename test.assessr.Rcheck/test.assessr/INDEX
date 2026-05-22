@@ -1,0 +1,12 @@
+extract_short_path      Helper to extract "R/<file>" from any path by
+                        taking the last two components
+generate_test_report    Generate HTML Report for Package Test
+                        Assessment
+get_package_coverage    get package test coverage
+get_pkg_name            get package name for display
+install_package_local   Install a Package from a Local Source Directory
+run_coverage            Run Coverage and Return Structured Coverage
+                        Results
+run_covr_modes          Run Coverage Analysis with Test Detection
+set_up_pkg              Create Information on Local Package
+                        Installation

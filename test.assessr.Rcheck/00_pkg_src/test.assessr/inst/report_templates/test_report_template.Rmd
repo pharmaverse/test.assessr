@@ -1,0 +1,419 @@
+---
+title: "&nbsp;"
+output:
+  rmarkdown::html_document:
+  css: www/styles.css
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "man/figures/",
+  out.width = "100%"
+)
+
+# Suppress package loading messages
+suppressMessages({
+  library(dplyr)
+  library(kableExtra)
+  library(knitr)
+})
+
+suppressWarnings({
+  library(htmltools)
+  library(htmlwidgets)
+})
+```
+
+# Package Test Report for `r get('pkg_name', envir = report_env)` version `r get('pkg_version', envir = report_env)` <a><img src="`r system.file('man/figures/test_assessr.png', package = 'test.assessr')`" align="right" height="100" /><br></a>
+
+```{r test_summary, echo=FALSE}
+library(knitr)
+library(kableExtra)
+
+test_summary_output <- get("test_pkg_summary_output", envir = report_env)
+
+test_summary_output_html <- knitr::kable(test_summary_output,
+                                         col.names = c("Type", "Values"),
+                                         format = "html") %>%
+  kableExtra::kable_styling("striped", 
+                            position = "left", 
+                            font_size = 12) %>%
+  kableExtra::row_spec(0, 
+                       bold = TRUE,
+                       italic = TRUE,
+                       background = "green") %>%
+  kableExtra::add_header_above(c("Test Assessment Summary" = 2), 
+                               bold = TRUE, 
+                               background = "green", 
+                               color = "black")
+
+test_summary_output_html <- test_summary_output_html %>%
+  kableExtra::row_spec(which(test_summary_output$Value == "Low"), background = "green") %>%
+  kableExtra::row_spec(which(test_summary_output$Value == "Medium"), background = "yellow") %>%
+  kableExtra::row_spec(which(test_summary_output$Value == "High"), background = "red")
+
+test_summary_output_html
+```
+
+```{r setup_multi, echo=FALSE}
+multi_framework <- get("multi_framework", envir = report_env)
+frameworks <- if (multi_framework) get("frameworks", envir = report_env) else character(0)
+```
+
+```{r test_details_single, echo=FALSE}
+if (!multi_framework) {
+  library(knitr)
+  library(kableExtra)
+  library(dplyr)
+  test_details_output <- get("test_details_output", envir = report_env)
+  test_details_output_display <- test_details_output %>% select(Metric, Value)
+  test_details_output_html <- knitr::kable((test_details_output_display),
+                                 col.names = c("Type", "Details"), "html")
+  kableExtra::kable_styling(test_details_output_html, 
+                            "striped", position = "left", font_size = 12) %>%
+  kableExtra::row_spec(0, bold = TRUE, italic = TRUE, background = "green") %>%
+  kableExtra::add_header_above(c("Test Assessment Run Details" = 2), bold = TRUE, background = "green", color = "black")
+}
+```
+
+```{r test_details_multi, echo=FALSE}
+if (multi_framework) {
+  library(knitr)
+  library(kableExtra)
+  library(dplyr)
+  library(htmltools)
+  framework_results <- get("framework_results", envir = report_env)
+  out_parts <- list()
+  for (fw in frameworks) {
+    fr <- framework_results[[fw]]
+    if (!is.null(fr$test_details_output)) {
+      test_details_output_display <- fr$test_details_output %>% select(Metric, Value)
+      test_details_output_html <- knitr::kable((test_details_output_display),
+                                     col.names = c("Type", "Details"), "html") %>%
+        kableExtra::kable_styling("striped", position = "left", font_size = 12) %>%
+        kableExtra::row_spec(0, bold = TRUE, italic = TRUE, background = "green") %>%
+        kableExtra::add_header_above(setNames(c(2), paste0("Test Assessment Run Details (", fw, ")")), bold = TRUE, background = "green", color = "black")
+      out_parts <- c(out_parts, list(
+        htmltools::tags$h3(paste0(fw, " Run Details")),
+        htmltools::HTML(as.character(test_details_output_html))
+      ))
+    }
+  }
+  if (length(out_parts) > 0) htmltools::tagList(out_parts)
+}
+```
+
+```{r test_coverage_single, echo=FALSE}
+if (!multi_framework) {
+  library(knitr)
+  library(kableExtra)
+  coverage_output <- get("coverage_output", envir = report_env)
+  colnames(coverage_output) <- c("Function", "Coverage", "Errors", "Notes")
+  coverage_output_html_DT <- DT::datatable(coverage_output, 
+                                           rownames = FALSE, 
+                                           colnames = c("Function", "Coverage", "Errors", "Notes"),
+                                           options = list(pageLength = 10, lengthMenu = c(10, 20, 50),
+                                                          search = list(search = ""), dom = 'Bfrtip',
+                                                          buttons = c('copy', 'csv', 'excel', 'pdf', 'print')))
+  coverage_output_html_DT <- coverage_output_html_DT %>%
+    DT::formatStyle(columns = 'Errors',
+      backgroundColor = DT::styleEqual(
+        levels = c("No testthat or testit configuration", "No test coverage errors", "Other Value"),
+        values = c("red", "green", "red"))) %>%
+    DT::formatStyle(columns = 'Notes',
+      backgroundColor = DT::styleEqual(
+        levels = c("No test coverage notes", "Other Value"),
+        values = c("green", "yellow")))
+  htmltools::tagList(
+    htmltools::tags$h2("Test Coverage", style = "font-weight: bold; background-color: green; color: black; text-align: center;"),
+    coverage_output_html_DT
+  )
+}
+```
+
+```{r test_coverage_multi, echo=FALSE}
+if (multi_framework) {
+  library(knitr)
+  library(kableExtra)
+  library(htmltools)
+  framework_results <- get("framework_results", envir = report_env)
+  out_parts <- list()
+  for (fw in frameworks) {
+    fr <- framework_results[[fw]]
+    if (!is.null(fr$coverage_output)) {
+      cov_out <- fr$coverage_output
+      colnames(cov_out) <- c("Function", "Coverage", "Errors", "Notes")
+      cov_out <- DT::datatable(cov_out, rownames = FALSE, 
+                               colnames = c("Function", "Coverage", "Errors", "Notes"),
+                               options = list(pageLength = 10, lengthMenu = c(10, 20, 50),
+                                              search = list(search = ""), dom = 'Bfrtip',
+                                              buttons = c('copy', 'csv', 'excel', 'pdf', 'print'))) %>%
+        DT::formatStyle(columns = 'Errors',
+          backgroundColor = DT::styleEqual(
+            levels = c("No testthat or testit configuration", "No test coverage errors", "Other Value"),
+            values = c("red", "green", "red"))) %>%
+        DT::formatStyle(columns = 'Notes',
+          backgroundColor = DT::styleEqual(
+            levels = c("No test coverage notes", "Other Value"),
+            values = c("green", "yellow")))
+      out_parts <- c(out_parts, list(
+        htmltools::tags$h3(paste0(fw, " Coverage")),
+        cov_out
+      ))
+    }
+  }
+  if (length(out_parts) > 0) htmltools::tagList(out_parts)
+}
+```
+
+```{r stf_nstf_detect, echo=FALSE}
+has_stf <- get("has_stf", envir = report_env)
+has_nstf <- get("has_nstf", envir = report_env)
+```
+
+```{r stf_nstf_selector, echo=FALSE, results='asis'}
+if (has_stf && !has_nstf) {
+  cat('
+<div style="margin-bottom: 20px;">
+  <label for="matrixSelector" style="background-color: purple; color: white; font-size: 20px; font-weight: bold; padding: 10px; border-radius: 5px; display: inline-block; margin-bottom: 10px;">Select Standard Test Type:</label>
+  <select id="matrixSelector" onchange="toggleMatrix(this.value)" style="margin-left: 10px; padding: 6px; font-size: 18px; border-radius: 4px;">
+    <option value="long_summary">Tests Passed</option>
+    <option value="tests_skip">Tests Skipped</option>
+  </select>
+</div>
+<script>
+  function toggleMatrix(value) {
+    var ids = ["long_summary", "tests_skip"];
+
+    // STF values map directly to div IDs
+    var showId = value;  
+
+    ids.forEach(function(id) {
+      var el = document.getElementById(id);
+      if (el) {
+        el.style.visibility = (id === showId) ? "visible" : "hidden";
+      }
+    });
+  }
+
+  document.addEventListener("DOMContentLoaded", function() {
+    toggleMatrix("long_summary");
+  });
+</script>
+')
+} else if (has_nstf && !has_stf) {
+  cat('
+<div style="margin-bottom: 20px;">
+  <label for="matrixSelector" style="background-color: purple; color: white; font-size: 20px; font-weight: bold; padding: 10px; border-radius: 5px; display: inline-block; margin-bottom: 10px;">Select Non-Standard Test Type:</label>
+  <select id="matrixSelector" onchange="toggleMatrix(this.value)" style="margin-left: 10px; padding: 6px; font-size: 18px; border-radius: 4px;">
+    <option value="no">No Tests</option>
+    <option value="skipped">Tests Skipped</option>
+    <option value="passing">Tests Passing</option>
+  </select>
+</div>
+<script>
+  function toggleMatrix(value) {
+    var ids = ["no_tests", "tests_skipped", "tests_passing"];
+    var showId = value === "no" ? "no_tests" : value === "skipped" ? "tests_skipped" : "tests_passing";
+    ids.forEach(function(id) {
+      var el = document.getElementById(id);
+      if (el) el.style.visibility = (id === showId) ? "visible" : "hidden";
+    });
+  }
+  document.addEventListener("DOMContentLoaded", function() {
+    var sel = document.getElementById("matrixSelector");
+    toggleMatrix(sel ? sel.value : "no");
+  });
+</script>
+')
+} else if (has_stf && has_nstf) {
+  cat('
+<div style="margin-bottom: 20px;">
+  <label for="matrixSelector" style="background-color: purple; color: white; font-size: 20px; font-weight: bold; padding: 10px; border-radius: 5px; display: inline-block; margin-bottom: 10px;">Select Test Type:</label>
+  <select id="matrixSelector" onchange="toggleMatrix(this.value)" style="margin-left: 10px; padding: 6px; font-size: 18px; border-radius: 4px;">
+    <option value="long_summary">Tests Passed</option>
+    <option value="tests_skip">Tests Skipped</option>
+    <option value="no">No Tests</option>
+    <option value="skipped">Tests Skipped (NSTF)</option>
+    <option value="passing">Tests Passing</option>
+  </select>
+</div>
+<script>
+  function toggleMatrix(value) {
+    var showId = value === "no" ? "no_tests" : value === "skipped" ? "tests_skipped" : value === "passing" ? "tests_passing" : value;
+    ["long_summary","tests_skip","no_tests","tests_skipped","tests_passing"].forEach(function(id) {
+      var el = document.getElementById(id);
+      if (el) el.style.display = (id === showId) ? "block" : "none";
+    });
+  }
+  document.addEventListener("DOMContentLoaded", function() { toggleMatrix(document.getElementById("matrixSelector") ? document.getElementById("matrixSelector").value : "long_summary"); });
+</script>
+')
+}
+```
+
+```{r stf_sections_single, echo=FALSE}
+
+if (!multi_framework && has_stf) {
+  library(DT)
+  library(htmltools)
+
+  # --- PASSING TESTS CONTENT ---
+  long_summary <- get("long_summary_df", envir = report_env)
+
+  long_summary_content <- if (is.data.frame(long_summary) && nrow(long_summary) > 0) {
+    colnames(long_summary) <- gsub("_", " ", colnames(long_summary))
+
+    DT::datatable(
+      long_summary,
+      elementId = "dt_stf_long_summary",
+      options = list(pageLength = 10, lengthMenu = c(10, 20, 50), dom = "Bfrtip"),
+      colnames = c("R function", "Test", "Test Block start line", "Test Status"),
+      caption = tags$caption(
+        style = "caption-side: top; text-align: left;",
+        tags$strong(tags$u("Passing Tests"))
+      ),
+      rownames = FALSE
+    )
+  } else {
+    tags$div(style = "padding: 8px;", "No passing tests.")
+  }
+
+  # --- SKIPPED TESTS CONTENT ---
+  tests_skip_df <- get("tests_skip_df", envir = report_env)
+
+  tests_skip_content <- if (is.data.frame(tests_skip_df) && nrow(tests_skip_df) > 0) {
+    DT::datatable(
+      tests_skip_df,
+      elementId = "dt_stf_tests_skip",
+      options = list(pageLength = 10, lengthMenu = c(10, 20, 50), dom = "Bfrtip"),
+      colnames = c("R function", "Test", "Test Status", "Expectation type", "Test Block start line"),
+      caption = tags$caption(
+        style = "caption-side: top; text-align: left;",
+        tags$strong(tags$u("Skipped Tests"))
+      ),
+      rownames = FALSE
+    )
+  } else {
+    tags$div(style = "padding: 8px;", "No skipped tests.")
+  }
+
+  # --- WRAP ONCE (NO DUPLICATE IDs), TOGGLE BY VISIBILITY ---
+  long_div <- tags$div(
+    id = "long_summary",
+    style = "position:absolute; top:0; left:0; right:0; visibility:visible;",
+    long_summary_content
+  )
+
+  skip_div <- tags$div(
+    id = "tests_skip",
+    style = "position:absolute; top:0; left:0; right:0; visibility:hidden;",
+    tests_skip_content
+  )
+
+  tags$div(
+    style = "position:relative; min-height:300px;",
+    tagList(long_div, skip_div)
+  )
+}
+
+
+```
+
+```{r nstf_sections_single, echo=FALSE}
+if (!multi_framework && has_nstf) {
+  library(knitr)
+  library(kableExtra)
+  library(DT)
+  library(htmltools)
+  functions_no_tests <- get("functions_no_tests", envir = report_env)
+  no_tests_content <- if (is.data.frame(functions_no_tests) && nrow(functions_no_tests) > 0) {
+    colnames(functions_no_tests) <- gsub("_", " ", colnames(functions_no_tests))
+    DT::datatable(functions_no_tests, elementId = "dt_nstf_no_tests",
+      options = list(pageLength = 10, lengthMenu = c(10, 20, 50), dom = 'Bfrtip'),
+      caption = htmltools::tags$caption(style = "caption-side: top; text-align: left;",
+        htmltools::tags$strong(htmltools::tags$u("Functions with No Tests"))), rownames = FALSE)
+  } else {
+    htmltools::tags$div(style = "padding: 8px; background:#fff3cd; border:1px solid #ffeeba; border-radius:6px;",
+      htmltools::tags$strong("No data to display: "), "The 'functions_no_tests' data frame is missing or has zero rows.")
+  }
+  tests_skipped_df <- get("tests_skipped_df", envir = report_env)
+  tests_skipped_content <- if (is.data.frame(tests_skipped_df) && nrow(tests_skipped_df) > 0) {
+    DT::datatable(tests_skipped_df, elementId = "dt_nstf_tests_skipped",
+      options = list(pageLength = 10, lengthMenu = c(10, 20, 50), dom = 'Bfrtip'),
+      colnames = c("File"), caption = htmltools::tags$caption(style = "caption-side: top; text-align: left;",
+        htmltools::tags$strong(htmltools::tags$u("Skipped Tests"))))
+  } else {
+    htmltools::tags$div(style = "padding: 8px;", "No skipped tests.")
+  }
+  tests_passing_df <- get("tests_passing_df", envir = report_env)
+  tests_passing_content <- if (is.data.frame(tests_passing_df) && nrow(tests_passing_df) > 0) {
+    DT::datatable(tests_passing_df, elementId = "dt_nstf_tests_passing",
+      options = list(pageLength = 10, lengthMenu = c(10, 20, 50), dom = 'Bfrtip'),
+      colnames = c("File"), caption = htmltools::tags$caption(style = "caption-side: top; text-align: left;",
+        htmltools::tags$strong(htmltools::tags$u("Passing Tests"))))
+  } else {
+    htmltools::tags$div(style = "padding: 8px;", "No passing tests.")
+  }
+  no_tests_div <- htmltools::tags$div(id = "no_tests", style = "position:absolute; top:0; left:0; right:0; visibility:visible;", no_tests_content)
+  tests_skipped_div <- htmltools::tags$div(id = "tests_skipped", style = "position:absolute; top:0; left:0; right:0; visibility:hidden;", tests_skipped_content)
+  tests_passing_div <- htmltools::tags$div(id = "tests_passing", style = "position:absolute; top:0; left:0; right:0; visibility:hidden;", tests_passing_content)
+  htmltools::tags$div(style = "position:relative; min-height:300px;", htmltools::tagList(no_tests_div, tests_skipped_div, tests_passing_div))
+}
+```
+
+```{r stf_nstf_sections_multi, echo=FALSE}
+if (multi_framework && (has_stf || has_nstf)) {
+  library(knitr)
+  library(kableExtra)
+  library(DT)
+  library(htmltools)
+  framework_results <- get("framework_results", envir = report_env)
+  default_visible <- if (has_nstf) "block" else "none"
+  build_div <- function(id, content, display = "none") {
+    if (length(content) == 0) return(htmltools::tags$div(id = id, style = paste0("display:", display, ";"), ""))
+    htmltools::tags$div(id = id, style = paste0("display:", display, ";"), htmltools::tagList(content))
+  }
+  long_summary_parts <- list()
+  tests_skip_parts <- list()
+  no_tests_parts <- list()
+  tests_skipped_parts <- list()
+  tests_passing_parts <- list()
+  for (fw in frameworks) {
+    fr <- framework_results[[fw]]
+    if (has_stf && !is.null(fr$long_summary_df) && is.data.frame(fr$long_summary_df) && nrow(fr$long_summary_df) > 0) {
+      colnames(fr$long_summary_df) <- gsub("_", " ", colnames(fr$long_summary_df))
+      cap <- htmltools::tags$caption(style = "caption-side: top;", htmltools::tags$strong(paste0("Passing Tests (", fw, ")")))
+      long_summary_parts <- c(long_summary_parts, list(htmltools::tags$h3(fw), DT::datatable(fr$long_summary_df, options = list(pageLength = 10, lengthMenu = c(10, 20, 50), dom = 'Bfrtip'), caption = cap, rownames = FALSE)))
+    }
+    if (has_stf && !is.null(fr$tests_skip_df) && is.data.frame(fr$tests_skip_df) && nrow(fr$tests_skip_df) > 0) {
+      cap <- htmltools::tags$caption(style = "caption-side: top;", htmltools::tags$strong(paste0("Skipped Tests (", fw, ")")))
+      tests_skip_parts <- c(tests_skip_parts, list(htmltools::tags$h3(fw), DT::datatable(fr$tests_skip_df, options = list(pageLength = 10, lengthMenu = c(10, 20, 50), dom = 'Bfrtip'), caption = cap, rownames = FALSE)))
+    }
+    if (has_nstf && !is.null(fr$functions_no_tests) && is.data.frame(fr$functions_no_tests) && nrow(fr$functions_no_tests) > 0) {
+      colnames(fr$functions_no_tests) <- gsub("_", " ", colnames(fr$functions_no_tests))
+      cap <- htmltools::tags$caption(style = "caption-side: top;", htmltools::tags$strong(paste0("Functions with No Tests (", fw, ")")))
+      no_tests_parts <- c(no_tests_parts, list(htmltools::tags$h3(fw), DT::datatable(fr$functions_no_tests, elementId = paste0("dt_multi_no_tests_", fw), options = list(pageLength = 10, lengthMenu = c(10, 20, 50), dom = 'Bfrtip'), caption = cap, rownames = FALSE)))
+    }
+    if (has_nstf && !is.null(fr$tests_skipped_df) && is.data.frame(fr$tests_skipped_df) && nrow(fr$tests_skipped_df) > 0) {
+      cap <- htmltools::tags$caption(style = "caption-side: top;", htmltools::tags$strong(paste0("Skipped Tests (", fw, ")")))
+      tests_skipped_parts <- c(tests_skipped_parts, list(htmltools::tags$h3(fw), DT::datatable(fr$tests_skipped_df, elementId = paste0("dt_multi_tests_skipped_", fw), options = list(pageLength = 10, lengthMenu = c(10, 20, 50), dom = 'Bfrtip'), caption = cap, rownames = FALSE)))
+    }
+    if (has_nstf && !is.null(fr$tests_passing_df) && is.data.frame(fr$tests_passing_df) && nrow(fr$tests_passing_df) > 0) {
+      cap <- htmltools::tags$caption(style = "caption-side: top;", htmltools::tags$strong(paste0("Passing Tests (", fw, ")")))
+      tests_passing_parts <- c(tests_passing_parts, list(htmltools::tags$h3(fw), DT::datatable(fr$tests_passing_df, elementId = paste0("dt_multi_tests_passing_", fw), options = list(pageLength = 10, lengthMenu = c(10, 20, 50), dom = 'Bfrtip'), caption = cap, rownames = FALSE)))
+    }
+  }
+  first_visible <- if (has_nstf) "no" else "long_summary"
+  d_long <- if (length(long_summary_parts) > 0) build_div("long_summary", long_summary_parts, if (first_visible == "long_summary") "block" else "none") else htmltools::tags$div(id = "long_summary", style = "display:none;")
+  d_skip <- if (length(tests_skip_parts) > 0) build_div("tests_skip", tests_skip_parts, "none") else htmltools::tags$div(id = "tests_skip", style = "display:none;")
+  d_no <- if (length(no_tests_parts) > 0) build_div("no_tests", no_tests_parts, if (first_visible == "no") "block" else "none") else htmltools::tags$div(id = "no_tests", style = "display:none;")
+  d_skipped <- if (length(tests_skipped_parts) > 0) build_div("tests_skipped", tests_skipped_parts, "none") else htmltools::tags$div(id = "tests_skipped", style = "display:none;")
+  d_passing <- if (length(tests_passing_parts) > 0) build_div("tests_passing", tests_passing_parts, "none") else htmltools::tags$div(id = "tests_passing", style = "display:none;")
+  htmltools::tagList(d_long, d_skip, d_no, d_skipped, d_passing)
+}
+```
