@@ -49,11 +49,11 @@ If the file does not contain any parseable test blocks or expectations,
 \seealso{
 \code{\link[utils]{getParseData}}
 
-Other stf_utility:
-\code{\link[=create_coverage_skip_stf]{create_coverage_skip_stf()}},
-\code{\link[=map_tests_stf]{map_tests_stf()}},
-\code{\link[=nest_test]{nest_test()}},
-\code{\link[=run_covr_skip_stf]{run_covr_skip_stf()}}
+Other stf_utility: 
+\code{\link{create_coverage_skip_stf}()},
+\code{\link{map_tests_stf}()},
+\code{\link{nest_test}()},
+\code{\link{run_covr_skip_stf}()}
 }
 \concept{stf_utility}
 \keyword{internal}
