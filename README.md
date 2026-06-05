@@ -37,7 +37,7 @@ This package executes the following tasks:
 
     -   Log into your `github` account
     -   Go to the token settings URL using the [Token Settings URL](https://github.com/settings/tokens)
-        -   (do not forget to add the SSH `Sanofi-GitHub` authorization)
+        -   (do not forget to add the SSH `GitHub` authorization)
 
 -   Create a `.Renviron` file with your GITHUBTOKEN as:
 
