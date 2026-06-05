@@ -14,6 +14,10 @@ temporarily replace its value (mock) while still complying with CRAN’s
 cov_env
 ```
 
+## Format
+
+An object of class `environment` of length 0.
+
 ## Details
 
 \*\*When is it built?\*\* During package setup, all \`R/\` files are

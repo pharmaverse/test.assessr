@@ -1,13 +1,13 @@
 <urlset xmlns = 'http://www.sitemaps.org/schemas/sitemap/0.9'>
 <url><loc>/404.html</loc></url>
+<url><loc>/LICENSE.html</loc></url>
 <url><loc>/articles/Generate_Test_Report.html</loc></url>
 <url><loc>/articles/How_to_Start.html</loc></url>
-<url><loc>/articles/index.html</loc></url>
 <url><loc>/articles/NSTF_Testing_Frameworks.html</loc></url>
 <url><loc>/articles/STF_Testing_Frameworks.html</loc></url>
+<url><loc>/articles/index.html</loc></url>
 <url><loc>/authors.html</loc></url>
 <url><loc>/index.html</loc></url>
-<url><loc>/LICENSE.html</loc></url>
 <url><loc>/news/index.html</loc></url>
 <url><loc>/reference/check_covr_skip_bioc_nstf.html</loc></url>
 <url><loc>/reference/check_covr_skip_nstf.html</loc></url>
@@ -58,10 +58,10 @@
 <url><loc>/reference/get_source_test_mapping_bioc_nstf.html</loc></url>
 <url><loc>/reference/get_source_test_mapping_nstf.html</loc></url>
 <url><loc>/reference/get_stf_test_path.html</loc></url>
-<url><loc>/reference/get_tests_long_sum_stf.html</loc></url>
-<url><loc>/reference/get_tests_skip_stf.html</loc></url>
 <url><loc>/reference/get_test_framework_type.html</loc></url>
 <url><loc>/reference/get_test_metadata.html</loc></url>
+<url><loc>/reference/get_tests_long_sum_stf.html</loc></url>
+<url><loc>/reference/get_tests_skip_stf.html</loc></url>
 <url><loc>/reference/handle_null.html</loc></url>
 <url><loc>/reference/index.html</loc></url>
 <url><loc>/reference/initialise_covr_env.html</loc></url>
@@ -96,8 +96,8 @@
 <url><loc>/reference/safe_left_join.html</loc></url>
 <url><loc>/reference/safe_unload_package.html</loc></url>
 <url><loc>/reference/safe_value.html</loc></url>
-<url><loc>/reference/setup_covr_env.html</loc></url>
 <url><loc>/reference/set_up_pkg.html</loc></url>
+<url><loc>/reference/setup_covr_env.html</loc></url>
 <url><loc>/reference/unpack_tarball.html</loc></url>
 <url><loc>/reference/unrowname.html</loc></url>
 </urlset>

@@ -7,3 +7,7 @@ Convert number to percent
 ``` r
 convert_number_to_percent(value)
 ```
+
+## Arguments
+
+- value:

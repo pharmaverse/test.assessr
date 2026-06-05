@@ -63,9 +63,8 @@ pkg_test_coverage <- get_package_coverage(pkg_source_path)
 #> unpacking test.package.0001 locally
 #> unpacked test.package.0001 locally
 #> installing test.package.0001 locally
-#> test.package.0001 is already installed
+#> test.package.0001 installed locally
 #> checking package test config
-#> Unloading test.package.0001 package to avoid coverage conflict...
 #> decider: testthat -> run_coverage()
 #> running code coverage for test.package.0001
 #> code coverage for test.package.0001 successful

@@ -26,14 +26,14 @@ This package executes the following tasks:
 
 # Package Installation
 
-## from [Github](https://github.com/Sanofi-Public/test.assessr)
+## from [Github](https://github.com/pharmaverse/test.assessr)
 
 - Create a `Personal Access Token` (PAT) on `github`
 
   - Log into your `github` account
   - Go to the token settings URL using the [Token Settings
     URL](https://github.com/settings/tokens)
-    - (do not forget to add the SSH `Sanofi-GitHub` authorization)
+    - (do not forget to add the SSH `GitHub` authorization)
 
 - Create a `.Renviron` file with your GITHUBTOKEN as:
 
@@ -48,7 +48,7 @@ This package executes the following tasks:
 &nbsp;
 
     auth_token = Sys.getenv("GITHUBTOKEN")
-    devtools::install_github("Sanofi-Public/test.assessr", ref = "main", auth_token = auth_token)
+    devtools::install_github("pharmaverse/test.assessr", ref = "main", auth_token = auth_token)
 
 # Usage
 
@@ -65,6 +65,7 @@ To assess your package’s test coverage, do the following steps:
 your `tar.gz` package source code
 
 ``` r
+
 # for local tar.gz R package
 dp <- (path/to/your/package)
 
