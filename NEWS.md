@@ -1,3 +1,11 @@
+# test.assessr 2.1.2
+
+## New Features
+
+- upgrade covr version
+- update docs for transition to pharmaverse
+- update docs for parameters
+
 # test.assessr 2.1.1
 
 ## New Features
