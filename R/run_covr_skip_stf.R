@@ -533,7 +533,7 @@ create_coverage_skip_stf <- function(
   
   
   # Clean up newly introduced globals
-  message(paste0("Removing new globals from environment for ", pkg))
+  message(paste0("Removing new globals from coverage environment for ", pkg))
   remove_new_globals(env = cov_env, initial_state = initial_cov_env_state)
   
   # Final cleanup
