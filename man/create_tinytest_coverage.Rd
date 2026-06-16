@@ -47,9 +47,25 @@ Intended for **source-tree** coverage of tinytest suites:
         for coverage.
   \item \code{NOT_CRAN} is set to \code{"true"} during the run (restored on exit)
         so tinytest \code{at_home()} logic treats the run as local.
+  \item Environment-gated suites (e.g. \pkg{Rcpp}'s \code{RunAllRcppTests})
+        are enabled via \code{prepare_tinytest_run_env()} before the run and
+        restored on exit, so gated tests execute instead of exiting early.
+  \item Packages with headers in \code{inst/include/} that self-compile during
+        tests receive dev-tree \code{-I} flags via
+        \code{prepare_tinytest_dev_includes()} (restored on exit).
   \item Test files are driven by \code{tinytest::run_test_dir()} from
-        \code{file.path(pkg_source_path, "inst", "tinytest")}.
+        \code{file.path(pkg_source_path, "inst", "tinytest")}. A fatal
+        top-level error in a single file (e.g. a test that asserts the
+        installed package layout, which differs from a \code{load_all} source
+        tree) is caught so it does not discard coverage already recorded for
+        the files that ran.
   \item Coverage is built from covr's counters using \code{covr::as_coverage()}.
+  \item Objects that test files create in \code{.GlobalEnv} are removed on
+        exit. Some suites (e.g. \pkg{Rcpp}) call \code{Rcpp::sourceCpp()},
+        whose \code{env} argument defaults to \code{globalenv()}, exporting
+        many compiled wrappers into the user's workspace. \code{.GlobalEnv} is
+        snapshotted before the run and only newly-added objects are removed
+        afterwards, so pre-existing objects are preserved.
 }
 
 \strong{Preconditions}
@@ -67,6 +83,8 @@ Other nstf_utility:
 \code{\link{create_nstf_covr_list}()},
 \code{\link{get_nstf_test_path}()},
 \code{\link{get_source_test_mapping_nstf}()},
+\code{\link{prepare_tinytest_dev_includes}()},
+\code{\link{prepare_tinytest_run_env}()},
 \code{\link{restrict_test_paths_to_framework}()},
 \code{\link{run_covr_skip_nstf}()}
 }

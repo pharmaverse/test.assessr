@@ -59,6 +59,8 @@ Other nstf_utility:
 \code{\link{create_tinytest_coverage}()},
 \code{\link{get_nstf_test_path}()},
 \code{\link{get_source_test_mapping_nstf}()},
+\code{\link{prepare_tinytest_dev_includes}()},
+\code{\link{prepare_tinytest_run_env}()},
 \code{\link{run_covr_skip_nstf}()}
 }
 \concept{nstf_utility}
