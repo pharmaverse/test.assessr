@@ -308,5 +308,47 @@ test_that("map_test handles tar_test blocks", {
   expect_true(any(grepl("tar_test", result$description)))
 })
 
+test_that("block_line_span returns the min/max line span of a block", {
+  blk <- data.frame(line1 = c(10, 12, 15), line2 = c(10, 14, 15))
+  span <- block_line_span(blk)
+  expect_equal(span[[1]], 10L)
+  expect_equal(span[[2]], 15L)
+})
+
+test_that("block_line_span returns NA when line info is unavailable", {
+  blk <- data.frame(token = "SYMBOL_FUNCTION_CALL", text = "test_that")
+  span <- block_line_span(blk)
+  expect_true(is.na(span[[1]]))
+  expect_true(is.na(span[[2]]))
+})
+
+test_that("map_test attaches the enclosing test_that block line span", {
+  tf <- tempfile(fileext = ".R")
+  writeLines(c(
+    "test_that('demo', {",   # 1  (block start)
+    "  x <- 1",              # 2  (non-expectation setup)
+    "  expect_equal(x, 1)",  # 3
+    "  expect_true(x > 0)",  # 4
+    "})"                     # 5  (block end)
+  ), tf)
+  on.exit(unlink(tf), add = TRUE)
+  
+  result <- map_test(tf)
+  
+  expect_s3_class(result, "data.frame")
+  expect_true(all(c("line1", "line2", "block_line1", "block_line2") %in% names(result)))
+  expect_false(any(is.na(result$block_line1)))
+  expect_false(any(is.na(result$block_line2)))
+  
+  # The block span must cover the non-expectation setup line (line 2) so that
+  # an erroring block is skipped in its entirety, and must extend to at least
+  # the last expectation.
+  expect_true(all(result$block_line1 <= 2))
+  expect_true(all(result$block_line2 >= 4))
+  
+  # Every expectation lies within the enclosing block span
+  expect_true(all(result$line1 >= result$block_line1 &
+                    result$line2 <= result$block_line2))
+})
 
 

@@ -18,7 +18,12 @@ discovered within the STF test directory. The data frame typically contains:
   \item{test}{The combined description and test label assigned to the
         expectation.}
   \item{expectation}{The expectation type detected (e.g., `expect_equal`).}
-  \item{linerange}{The associated line numbers for that expectation.}
+  \item{line1, line2}{The starting and ending line numbers of the
+        expectation.}
+  \item{block_line1, block_line2}{The starting and ending line numbers of the
+        enclosing test block (e.g., the whole `test_that()` call). Used to
+        skip an entire failing/erroring block, including non-expectation
+        setup code.}
 }
 
 This structured mapping is used by downstream STF processing functions to
@@ -39,7 +44,9 @@ hierarchy of expectations, including:
   \item context or description
   \item test label
   \item expectation type
-  \item line ranges associated with each expectation
+  \item starting and ending line numbers of the
+  \item starting and ending line numbers of the
+        enclosing test block 
 }
 
 Files that contain no parseable test structure are omitted. If no valid
@@ -50,11 +57,11 @@ test files are found, the function returns `NULL`.
   \code{\link[base]{lapply}},
   \code{\link[base]{rbind}}
 
-Other stf_utility: 
-\code{\link{create_coverage_skip_stf}()},
-\code{\link{map_test}()},
-\code{\link{nest_test}()},
-\code{\link{run_covr_skip_stf}()}
+Other stf_utility:
+\code{\link[=create_coverage_skip_stf]{create_coverage_skip_stf()}},
+\code{\link[=map_test]{map_test()}},
+\code{\link[=nest_test]{nest_test()}},
+\code{\link[=run_covr_skip_stf]{run_covr_skip_stf()}}
 }
 \concept{stf_utility}
 \keyword{internal}
