@@ -66,12 +66,35 @@ Intended for \*\*source-tree\*\* coverage of tinytest suites:
 - `NOT_CRAN` is set to `"true"` during the run (restored on exit) so
   tinytest `at_home()` logic treats the run as local.
 
+- Environment-gated suites (e.g. Rcpp's `RunAllRcppTests`) are enabled
+  via [`prepare_tinytest_run_env()`](prepare_tinytest_run_env.md) before
+  the run and restored on exit, so gated tests execute instead of
+  exiting early.
+
+- Packages with headers in `inst/include/` that self-compile during
+  tests receive dev-tree `-I` flags via
+  [`prepare_tinytest_dev_includes()`](prepare_tinytest_dev_includes.md)
+  (restored on exit).
+
 - Test files are driven by
   [`tinytest::run_test_dir()`](https://rdrr.io/pkg/tinytest/man/run_test_dir.html)
-  from `file.path(pkg_source_path, "inst", "tinytest")`.
+  from `file.path(pkg_source_path, "inst", "tinytest")`. A fatal
+  top-level error in a single file (e.g. a test that asserts the
+  installed package layout, which differs from a `load_all` source tree)
+  is caught so it does not discard coverage already recorded for the
+  files that ran.
 
 - Coverage is built from covr's counters using
   [`covr::as_coverage()`](http://covr.r-lib.org/reference/as_coverage.md).
+
+- Objects that test files create in `.GlobalEnv` are removed on exit.
+  Some suites (e.g. Rcpp) call
+  [`Rcpp::sourceCpp()`](https://rdrr.io/pkg/Rcpp/man/sourceCpp.html),
+  whose `env` argument defaults to
+  [`globalenv()`](https://rdrr.io/r/base/environment.html), exporting
+  many compiled wrappers into the user's workspace. `.GlobalEnv` is
+  snapshotted before the run and only newly-added objects are removed
+  afterwards, so pre-existing objects are preserved.
 
 **Preconditions**
 
@@ -89,5 +112,7 @@ Other nstf_utility:
 [`create_nstf_covr_list()`](create_nstf_covr_list.md),
 [`get_nstf_test_path()`](get_nstf_test_path.md),
 [`get_source_test_mapping_nstf()`](get_source_test_mapping_nstf.md),
+[`prepare_tinytest_dev_includes()`](prepare_tinytest_dev_includes.md),
+[`prepare_tinytest_run_env()`](prepare_tinytest_run_env.md),
 [`restrict_test_paths_to_framework()`](restrict_test_paths_to_framework.md),
 [`run_covr_skip_nstf()`](run_covr_skip_nstf.md)

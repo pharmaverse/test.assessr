@@ -81,6 +81,8 @@
 <url><loc>/reference/normalize_test_results.html</loc></url>
 <url><loc>/reference/prepare_for_bioc_runit.html</loc></url>
 <url><loc>/reference/prepare_tests_for_package_dt.html</loc></url>
+<url><loc>/reference/prepare_tinytest_dev_includes.html</loc></url>
+<url><loc>/reference/prepare_tinytest_run_env.html</loc></url>
 <url><loc>/reference/remove_new_globals.html</loc></url>
 <url><loc>/reference/remove_run_unitTests_mapping.html</loc></url>
 <url><loc>/reference/restrict_test_paths_to_framework.html</loc></url>

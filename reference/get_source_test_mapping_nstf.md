@@ -41,5 +41,7 @@ Other nstf_utility:
 [`create_nstf_covr_list()`](create_nstf_covr_list.md),
 [`create_tinytest_coverage()`](create_tinytest_coverage.md),
 [`get_nstf_test_path()`](get_nstf_test_path.md),
+[`prepare_tinytest_dev_includes()`](prepare_tinytest_dev_includes.md),
+[`prepare_tinytest_run_env()`](prepare_tinytest_run_env.md),
 [`restrict_test_paths_to_framework()`](restrict_test_paths_to_framework.md),
 [`run_covr_skip_nstf()`](run_covr_skip_nstf.md)
