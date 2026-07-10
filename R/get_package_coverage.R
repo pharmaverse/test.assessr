@@ -73,6 +73,13 @@ get_package_coverage <-function(path = NULL, package_installed = NULL) {
   # Ensure options are restored even if the function errors
   on.exit(options(repos = old_repos), add = TRUE)
  
+  # Baseline of the user's workspace, captured before any tests run. Package
+  # tests can load objects into .GlobalEnv (e.g. data(trees, package =
+  # "datasets") in RcppArmadillo's test_fastLm.R, whose default envir is
+  # .GlobalEnv). These are removed after the run via remove_new_globals(), which
+  # only drops newly-added names, so pre-existing user objects are preserved.
+  global_baseline <- ls(envir = globalenv(), all.names = TRUE)
+  
   pkg_source_path <- if (is.null(path)) file.choose() else path
   
   if (!file.exists(pkg_source_path)) {
@@ -103,6 +110,13 @@ get_package_coverage <-function(path = NULL, package_installed = NULL) {
   
   #clean up cov env
   cleanup_and_return_null(env = cov_env)
+  
+  # Drop datasets/objects that package tests loaded into .GlobalEnv during the
+  # run, while preserving the returned coverage object and the user's
+  # pre-existing workspace.
+  suppressMessages(
+    remove_new_globals(env = globalenv(), initial_state = global_baseline)
+  )
   
   return(package_coverage)
 } 

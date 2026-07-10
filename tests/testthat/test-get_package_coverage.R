@@ -54,6 +54,7 @@ test_that("get_package_coverage works with mocked file.choose", {
   mockery::stub(get_package_coverage, "install_package_local", function(pkg_source_path) TRUE)
   mockery::stub(get_package_coverage, "run_covr_modes",  mock_run_covr_modes)
   mockery::stub(get_package_coverage, "cleanup_and_return_null", function(...) invisible(NULL))
+  mockery::stub(get_package_coverage, "remove_new_globals", function(...) invisible(NULL))
   
   # --- Execute ---
   tpc <- get_package_coverage()
@@ -110,6 +111,9 @@ test_that("get_package_coverage outputs message and returns NULL when package in
   })
   # Stub install_package_local to return FALSE (simulate installation failure)
   mockery::stub(get_package_coverage, "install_package_local", function(pkg_source_path) FALSE)
+  # Keep cleanup hermetic (operate on neither real cov_env nor .GlobalEnv)
+  mockery::stub(get_package_coverage, "cleanup_and_return_null", function(...) invisible(NULL))
+  mockery::stub(get_package_coverage, "remove_new_globals", function(...) invisible(NULL))
   
   # Capture the message and check result is NULL (since get_package_coverage never sets it in the else block)
   expect_message(
@@ -148,6 +152,11 @@ test_that("on.exit restores NULL when old covr.record_tests was NULL (IF branch)
   mockery::stub(fn, "test.assessr::run_covr_modes", function(...) "dummy-cov")
   mockery::stub(fn, "cleanup_and_return_null", function(...) invisible(NULL))
   mockery::stub(fn, "test.assessr::cleanup_and_return_null", function(...) invisible(NULL))
+  # Neutralise the .GlobalEnv cleanup so the test never touches the real
+  # workspace (only the unqualified stub is used; the namespaced one mirrors
+  # the cleanup_and_return_null pattern above).
+  mockery::stub(fn, "remove_new_globals", function(...) invisible(NULL))
+  mockery::stub(fn, "test.assessr::remove_new_globals", function(...) invisible(NULL))
   
   ## --- Control what the function *sees* for old value ---
   stub_getOption <- function(x, default = NULL) {
@@ -212,6 +221,11 @@ test_that("on.exit restores previous non-NULL covr.record_tests (ELSE branch)", 
   mockery::stub(fn, "test.assessr::run_covr_modes", function(...) "dummy-cov")
   mockery::stub(fn, "cleanup_and_return_null", function(...) invisible(NULL))
   mockery::stub(fn, "test.assessr::cleanup_and_return_null", function(...) invisible(NULL))
+  # Neutralise the .GlobalEnv cleanup so the test never touches the real
+  # workspace (only the unqualified stub is used; the namespaced one mirrors
+  # the cleanup_and_return_null pattern above).
+  mockery::stub(fn, "remove_new_globals", function(...) invisible(NULL))
+  mockery::stub(fn, "test.assessr::remove_new_globals", function(...) invisible(NULL))
   
   ## --- Control what the function *sees* as old value ---
   stub_getOption <- function(x, default = NULL) {
@@ -265,6 +279,7 @@ test_that("get_package_coverage skips installation when package_installed is TRU
   mockery::stub(fn, "install_package_local", mock_install_local)
   mockery::stub(fn, "file.exists", mock_file_exists)
   mockery::stub(fn, "cleanup_and_return_null", function(...) invisible(NULL))
+  mockery::stub(fn, "remove_new_globals", function(...) invisible(NULL))
   
   result <- fn(path = pkg_source_path, package_installed = TRUE)
   
@@ -294,6 +309,7 @@ test_that("get_package_coverage installs package when package_installed is NULL"
   mockery::stub(fn, "install_package_local", mock_install_local)
   mockery::stub(fn, "run_covr_modes", mock_run_covr_modes)
   mockery::stub(fn, "cleanup_and_return_null", function(...) invisible(NULL))
+  mockery::stub(fn, "remove_new_globals", function(...) invisible(NULL))
   
   result <- fn(path = pkg_source_path, package_installed = NULL)
   
@@ -322,6 +338,7 @@ test_that("get_package_coverage installs package when package_installed is FALSE
   mockery::stub(fn, "install_package_local", mock_install_local)
   mockery::stub(fn, "run_covr_modes", mock_run_covr_modes)
   mockery::stub(fn, "cleanup_and_return_null", function(...) invisible(NULL))
+  mockery::stub(fn, "remove_new_globals", function(...) invisible(NULL))
   
   result <- fn(path = pkg_source_path, package_installed = FALSE)
   
@@ -359,4 +376,45 @@ test_that("get_package_coverage warns and returns NULL when setup pkg_source_pat
   mockery::expect_called(mock_set_up_pkg, 1)
   mockery::expect_called(mock_install_local, 0)
   mockery::expect_called(mock_run_covr_modes, 0)
+})
+
+
+test_that("get_package_coverage removes globals introduced during the run but preserves pre-existing ones", {
+  skip_on_cran()
+  skip_if_not_installed("mockery")
+  
+  fn <- test.assessr::get_package_coverage
+  pkg_source_path <- tempdir()
+  expected <- list(total_cov = 0.8, res_cov = list(name = "dummy"))
+  
+  # Fake global environment so the real .GlobalEnv is never touched. It holds a
+  # pre-existing user object that must survive cleanup.
+  fake_global <- new.env(parent = emptyenv())
+  assign("user_obj", 42L, envir = fake_global)
+  
+  mockery::stub(fn, "globalenv", function() fake_global)
+  mockery::stub(fn, "file.exists", function(path) TRUE)
+  mockery::stub(fn, "set_up_pkg", function(pkg_source_path) list(pkg_source_path = pkg_source_path))
+  mockery::stub(fn, "install_package_local", function(...) TRUE)
+  # Simulate a test run that loads a dataset into the (fake) .GlobalEnv, like
+  # data(trees, package = "datasets") in RcppArmadillo's test_fastLm.R.
+  mockery::stub(fn, "run_covr_modes", function(...) {
+    assign("trees", data.frame(x = 1), envir = fake_global)
+    expected
+  })
+  mockery::stub(fn, "cleanup_and_return_null", function(...) invisible(NULL))
+  # remove_new_globals is intentionally NOT stubbed; we exercise it for real
+  # against the fake global env.
+  
+  # capture.output swallows remove_new_globals' print() of the removed names
+  invisible(capture.output(
+    result <- fn(path = pkg_source_path, package_installed = TRUE)
+  ))
+  
+  expect_identical(result, expected)
+  # the object introduced during the run is removed ...
+  expect_false(exists("trees", envir = fake_global, inherits = FALSE))
+  # ... but the user's pre-existing object is preserved
+  expect_true(exists("user_obj", envir = fake_global, inherits = FALSE))
+  expect_identical(get("user_obj", envir = fake_global), 42L)
 })
