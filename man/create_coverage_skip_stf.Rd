@@ -70,11 +70,11 @@ only applies the skip mappings supplied in `test_skip`.
   \code{\link[covr]{package_coverage}},
   \code{\link[covr]{environment_coverage}}
 
-Other stf_utility: 
-\code{\link{map_test}()},
-\code{\link{map_tests_stf}()},
-\code{\link{nest_test}()},
-\code{\link{run_covr_skip_stf}()}
+Other stf_utility:
+\code{\link[=map_test]{map_test()}},
+\code{\link[=map_tests_stf]{map_tests_stf()}},
+\code{\link[=nest_test]{nest_test()}},
+\code{\link[=run_covr_skip_stf]{run_covr_skip_stf()}}
 }
 \concept{stf_utility}
 \keyword{internal}

@@ -50,11 +50,11 @@ test files are found, the function returns `NULL`.
   \code{\link[base]{lapply}},
   \code{\link[base]{rbind}}
 
-Other stf_utility: 
-\code{\link{create_coverage_skip_stf}()},
-\code{\link{map_test}()},
-\code{\link{nest_test}()},
-\code{\link{run_covr_skip_stf}()}
+Other stf_utility:
+\code{\link[=create_coverage_skip_stf]{create_coverage_skip_stf()}},
+\code{\link[=map_test]{map_test()}},
+\code{\link[=nest_test]{nest_test()}},
+\code{\link[=run_covr_skip_stf]{run_covr_skip_stf()}}
 }
 \concept{stf_utility}
 \keyword{internal}

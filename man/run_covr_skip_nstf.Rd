@@ -56,16 +56,16 @@ The output mirrors the structure returned by the STF skip‑aware workflow so
 that downstream reporting remains consistent across frameworks.
 }
 \seealso{
-Other nstf_utility: 
-\code{\link{check_covr_skip_testit}()},
-\code{\link{create_base_tests_coverage}()},
-\code{\link{create_nstf_covr_list}()},
-\code{\link{create_tinytest_coverage}()},
-\code{\link{get_nstf_test_path}()},
-\code{\link{get_source_test_mapping_nstf}()},
-\code{\link{prepare_tinytest_dev_includes}()},
-\code{\link{prepare_tinytest_run_env}()},
-\code{\link{restrict_test_paths_to_framework}()}
+Other nstf_utility:
+\code{\link[=check_covr_skip_testit]{check_covr_skip_testit()}},
+\code{\link[=create_base_tests_coverage]{create_base_tests_coverage()}},
+\code{\link[=create_nstf_covr_list]{create_nstf_covr_list()}},
+\code{\link[=create_tinytest_coverage]{create_tinytest_coverage()}},
+\code{\link[=get_nstf_test_path]{get_nstf_test_path()}},
+\code{\link[=get_source_test_mapping_nstf]{get_source_test_mapping_nstf()}},
+\code{\link[=prepare_tinytest_dev_includes]{prepare_tinytest_dev_includes()}},
+\code{\link[=prepare_tinytest_run_env]{prepare_tinytest_run_env()}},
+\code{\link[=restrict_test_paths_to_framework]{restrict_test_paths_to_framework()}}
 }
 \concept{nstf_utility}
 \keyword{internal}
