@@ -58,16 +58,16 @@ unaffected. Callers should register the returned \code{teardown} via
 \code{on.exit()} to restore the previous environment state.
 }
 \seealso{
-Other nstf_utility: 
-\code{\link{check_covr_skip_testit}()},
-\code{\link{create_base_tests_coverage}()},
-\code{\link{create_nstf_covr_list}()},
-\code{\link{create_tinytest_coverage}()},
-\code{\link{get_nstf_test_path}()},
-\code{\link{get_source_test_mapping_nstf}()},
-\code{\link{prepare_tinytest_dev_includes}()},
-\code{\link{restrict_test_paths_to_framework}()},
-\code{\link{run_covr_skip_nstf}()}
+Other nstf_utility:
+\code{\link[=check_covr_skip_testit]{check_covr_skip_testit()}},
+\code{\link[=create_base_tests_coverage]{create_base_tests_coverage()}},
+\code{\link[=create_nstf_covr_list]{create_nstf_covr_list()}},
+\code{\link[=create_tinytest_coverage]{create_tinytest_coverage()}},
+\code{\link[=get_nstf_test_path]{get_nstf_test_path()}},
+\code{\link[=get_source_test_mapping_nstf]{get_source_test_mapping_nstf()}},
+\code{\link[=prepare_tinytest_dev_includes]{prepare_tinytest_dev_includes()}},
+\code{\link[=restrict_test_paths_to_framework]{restrict_test_paths_to_framework()}},
+\code{\link[=run_covr_skip_nstf]{run_covr_skip_nstf()}}
 }
 \concept{nstf_utility}
 \keyword{internal}

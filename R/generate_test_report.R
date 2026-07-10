@@ -241,7 +241,7 @@ handle_null <- function(x) {
 
 #' Convert number to abbreviation
 #'
-#' @param value 
+#' @param value - number to be converted
 #'
 #' @keywords internal
 convert_number_to_abbreviation <- function(value) {
@@ -264,7 +264,7 @@ convert_number_to_abbreviation <- function(value) {
 
 #' Convert number to percent
 #'
-#' @param value 
+#' @param value - number to be converted
 #'
 #' @keywords internal
 convert_number_to_percent <- function(value) {

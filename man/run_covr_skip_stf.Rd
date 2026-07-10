@@ -59,11 +59,11 @@ The function:
 }
 }
 \seealso{
-Other stf_utility: 
-\code{\link{create_coverage_skip_stf}()},
-\code{\link{map_test}()},
-\code{\link{map_tests_stf}()},
-\code{\link{nest_test}()}
+Other stf_utility:
+\code{\link[=create_coverage_skip_stf]{create_coverage_skip_stf()}},
+\code{\link[=map_test]{map_test()}},
+\code{\link[=map_tests_stf]{map_tests_stf()}},
+\code{\link[=nest_test]{nest_test()}}
 }
 \concept{stf_utility}
 \keyword{internal}
