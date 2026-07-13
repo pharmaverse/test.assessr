@@ -19,25 +19,16 @@ test_that("parses and installs dependencies", {
   mockery::stub(load_dependencies_into_env, "file.exists", TRUE)
   mockery::stub(load_dependencies_into_env, "read.dcf", desc)
   
-  # --- Availability check (requireNamespace) ---
-  # Call order expected:
-  #   1) requireNamespace("remotes", quietly = TRUE)
-  #   2) requireNamespace("pkgA", quietly = TRUE) -> FALSE (needs install)
-  #   3) requireNamespace("pkgB", quietly = TRUE) -> TRUE (already installed)
-  #   4) requireNamespace("pkgC", quietly = TRUE) -> FALSE (needs install)
-  req_ns_mock <- mockery::mock(TRUE, FALSE, TRUE, FALSE)
-  mockery::stub(load_dependencies_into_env, "requireNamespace", req_ns_mock)
+  # --- remotes availability check ---
+  # Only requireNamespace call inside load_dependencies_into_env itself.
+  mockery::stub(load_dependencies_into_env, "requireNamespace", TRUE)
   
-  # --- packageDescription (Version checks) ---
-  # Call order expected:
-  #   1) packageDescription("pkgA", fields = "Version") -> "0.9.0" (fails >= 1.0.0)
-  pkg_desc_mock <- mockery::mock("0.9.0")
-  mockery::stub(load_dependencies_into_env, "utils::packageDescription", pkg_desc_mock)
-  
-  # --- Installers ---
-  # install.packages() should be called for pkgA (fails >= 1.0.0) and for pkgC (missing)
-  install_mock <- mockery::mock(invisible(NULL), invisible(NULL))
-  mockery::stub(load_dependencies_into_env, "utils::install.packages", install_mock)
+  # --- Installer seam ---
+  # Stub install_if_needed so NO real installation is attempted. Without this,
+  # the real install.packages() runs inside install_if_needed and triggers
+  # "Installing package into ..." prompts when run interactively.
+  install_mock <- mockery::mock(invisible(TRUE), invisible(TRUE), invisible(TRUE))
+  mockery::stub(load_dependencies_into_env, "install_if_needed", install_mock)
   
   # --- loadNamespace() ---
   load_ns_mock <- mockery::mock(invisible(NULL), invisible(NULL), invisible(NULL))
@@ -50,6 +41,12 @@ test_that("parses and installs dependencies", {
   # --- Run & assertions ---
   suppressWarnings(result <- load_dependencies_into_env("fakepkg", env))
   expect_equal(result, invisible(TRUE))
+  
+  # install_if_needed() called three times with parsed op/ver: pkgA, pkgB, pkgC
+  mockery::expect_called(install_mock, 3)
+  mockery::expect_args(install_mock, 1, "pkgA", ">=", "1.0.0")
+  mockery::expect_args(install_mock, 2, "pkgB", NULL, NULL)
+  mockery::expect_args(install_mock, 3, "pkgC", NULL, NULL)
   
   # import_namespace_exports() called three times: pkgA, pkgB, pkgC
   mockery::expect_called(import_mock, 3)
