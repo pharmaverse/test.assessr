@@ -1,4 +1,5 @@
 test_that("fails if DESCRIPTION file is missing", {
+  skip_on_cran()
   env <- new.env()
   mockery::stub(load_dependencies_into_env, "requireNamespace", TRUE)
   mockery::stub(load_dependencies_into_env, "file.exists", FALSE)
