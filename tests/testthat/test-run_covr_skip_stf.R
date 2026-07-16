@@ -342,7 +342,7 @@ testthat::test_that("Fallback triggers and succeeds: package_coverage() is calle
   cov_env <- new.env(parent = emptyenv())
   
   # ---- Build a 'no coverage' sentinel res_sum for first summary call ----
-  sentinel_fc <- structure(NA_real_, .Dim = 1L, .Dimnames = list("no_coverage.R"))
+  sentinel_fc <- structure(NA_real_, dim = 1L, dimnames = list("no_coverage.R"))
   res_sum_no_cov <- list(
     total_cov = NA,
     res_cov = list(
@@ -454,7 +454,7 @@ testthat::test_that("Fallback triggers and errors: error handler path sets cvr <
   cov_env <- new.env(parent = emptyenv())
   
   # ---- Sentinel first summary ----
-  sentinel_fc <- structure(NA_real_, .Dim = 1L, .Dimnames = list("no_coverage.R"))
+  sentinel_fc <- structure(NA_real_, dim = 1L, dimnames = list("no_coverage.R"))
   res_sum_no_cov <- list(
     total_cov = NA,
     res_cov = list(
@@ -1656,7 +1656,7 @@ testthat::test_that("work_dir outside tempdir -> warns but proceeds", {
 
 testthat::test_that("TRUE when sentinel has dimnames == 'no_coverage.R'", {
   # 1x1 NA with row dimname "no_coverage.R"
-  fc <- structure(NA_real_, .Dim = 1L, .Dimnames = list("no_coverage.R"))
+  fc <- structure(NA_real_, dim = 1L, dimnames = list("no_coverage.R"))
   cov <- list(res_cov = list(coverage = list(filecoverage = fc)))
   
   out <- is_no_coverage_cov(cov)
@@ -1665,7 +1665,7 @@ testthat::test_that("TRUE when sentinel has dimnames == 'no_coverage.R'", {
 
 testthat::test_that("TRUE when sentinel found via names() fallback and dimnames() is stubbed to NULL", {
   # 1x1 NA with *names* set (no dimnames)
-  fc <- structure(NA_real_, .Dim = 1L)
+  fc <- structure(NA_real_, dim = 1L)
   names(fc) <- "no_coverage.R"
   cov <- list(res_cov = list(coverage = list(filecoverage = fc)))
   
@@ -1687,7 +1687,7 @@ testthat::test_that("FALSE when length != 1 even if 'no_coverage.R' present", {
 })
 
 testthat::test_that("FALSE when lone NA but filename is not 'no_coverage.R'", {
-  fc <- structure(NA_real_, .Dim = 1L, .Dimnames = list("different_file.R"))
+  fc <- structure(NA_real_, dim = 1L, dimnames = list("different_file.R"))
   cov <- list(res_cov = list(coverage = list(filecoverage = fc)))
   
   out <- is_no_coverage_cov(cov)
@@ -1706,7 +1706,7 @@ testthat::test_that("FALSE when filecoverage retrieval fails (tryCatch path -> N
 })
 
 testthat::test_that("FALSE when filecoverage has no names or dimnames", {
-  fc <- structure(NA_real_, .Dim = 1L)  # no dimnames
+  fc <- structure(NA_real_, dim = 1L)  # no dimnames
   # no names(fc) either
   cov <- list(res_cov = list(coverage = list(filecoverage = fc)))
   
