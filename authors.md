@@ -20,11 +20,11 @@ Source:
 
 Gillian E, Bottois H, Charliquart P, Couturier A (2026). *test.assessr:
 Assessing Package Test Reliability and Quality*. R package version
-2.1.2.
+2.1.3.
 
     @Manual{,
       title = {test.assessr: Assessing Package Test Reliability and Quality},
       author = {Edward Gillian and Hugo Bottois and Paulin Charliquart and Andre Couturier},
       year = {2026},
-      note = {R package version 2.1.2},
+      note = {R package version 2.1.3},
     }

@@ -13,7 +13,7 @@ test files, expectations, contexts, test names, and associated line ranges."></h
 
     <a class="navbar-brand me-2" href="../index.html">test.assessr</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Released version">2.1.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Released version">2.1.3</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -80,8 +80,15 @@ discovered within the STF test directory. The data frame typically contains:</p>
   <dt>expectation</dt>
 <dd><p>The expectation type detected (e.g., `expect_equal`).</p></dd>
 
-  <dt>linerange</dt>
-<dd><p>The associated line numbers for that expectation.</p></dd>
+  <dt>line1, line2</dt>
+<dd><p>The starting and ending line numbers of the
+        expectation.</p></dd>
+
+  <dt>block_line1, block_line2</dt>
+<dd><p>The starting and ending line numbers of the
+        enclosing test block (e.g., the whole `test_that()` call). Used to
+        skip an entire failing/erroring block, including non-expectation
+        setup code.</p></dd>
 
 
 </dl><p>This structured mapping is used by downstream STF processing functions to
@@ -95,7 +102,9 @@ hierarchy of expectations, including:</p><ul><li><p>file name</p></li>
 <li><p>context or description</p></li>
 <li><p>test label</p></li>
 <li><p>expectation type</p></li>
-<li><p>line ranges associated with each expectation</p></li>
+<li><p>starting and ending line numbers of the</p></li>
+<li><p>starting and ending line numbers of the
+        enclosing test block</p></li>
 </ul><p>Files that contain no parseable test structure are omitted. If no valid
 test files are found, the function returns `NULL`.</p>
     </div>

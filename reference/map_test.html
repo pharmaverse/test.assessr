@@ -15,7 +15,7 @@ context, and source line ranges for downstream analysis."></head><body>
 
     <a class="navbar-brand me-2" href="../index.html">test.assessr</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Released version">2.1.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Released version">2.1.3</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -79,9 +79,13 @@ the test file. Typical columns include:</p><dl><dt>description</dt>
   <dt>expectation</dt>
 <dd><p>The expectation type (e.g., `expect_equal`).</p></dd>
 
-  <dt>linerange</dt>
-<dd><p>Numeric vector giving the range of lines associated with
-        the expectation.</p></dd>
+  <dt>line1, line2</dt>
+<dd><p>Numeric start/end lines associated with the
+        expectation.</p></dd>
+
+  <dt>block_line1, block_line2</dt>
+<dd><p>Numeric start/end lines of the enclosing
+        test block (e.g., the whole `test_that()` call).</p></dd>
 
   <dt>test</dt>
 <dd><p>Test label (combined description and nested block label, if

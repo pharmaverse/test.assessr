@@ -37,9 +37,15 @@ typically contains:
 
   The expectation type detected (e.g., \`expect_equal\`).
 
-- linerange:
+- line1, line2:
 
-  The associated line numbers for that expectation.
+  The starting and ending line numbers of the expectation.
+
+- block_line1, block_line2:
+
+  The starting and ending line numbers of the enclosing test block
+  (e.g., the whole \`test_that()\` call). Used to skip an entire
+  failing/erroring block, including non-expectation setup code.
 
 This structured mapping is used by downstream STF processing functions
 to support skip mapping, coverage enhancement, and reporting.
@@ -58,7 +64,9 @@ the hierarchy of expectations, including:
 
 - expectation type
 
-- line ranges associated with each expectation
+- starting and ending line numbers of the
+
+- starting and ending line numbers of the enclosing test block
 
 Files that contain no parseable test structure are omitted. If no valid
 test files are found, the function returns \`NULL\`.

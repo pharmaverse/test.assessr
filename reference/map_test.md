@@ -32,10 +32,14 @@ identified in the test file. Typical columns include:
 
   The expectation type (e.g., \`expect_equal\`).
 
-- linerange:
+- line1, line2:
 
-  Numeric vector giving the range of lines associated with the
-  expectation.
+  Numeric start/end lines associated with the expectation.
+
+- block_line1, block_line2:
+
+  Numeric start/end lines of the enclosing test block (e.g., the whole
+  \`test_that()\` call).
 
 - test:
 
