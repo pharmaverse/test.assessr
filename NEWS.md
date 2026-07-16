@@ -1,3 +1,10 @@
+# test.assessr 2.1.3
+
+## New Features
+
+- fix CRAN issue with `test-run_covr_skip_stf`
+- increase test coverage for `test-map_tests_stf`, `test-unittest_methods`
+
 # test.assessr 2.1.2
 
 ## New Features
