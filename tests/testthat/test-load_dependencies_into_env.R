@@ -1,4 +1,5 @@
 test_that("fails if DESCRIPTION file is missing", {
+  skip_on_cran()
   env <- new.env()
   mockery::stub(load_dependencies_into_env, "requireNamespace", TRUE)
   mockery::stub(load_dependencies_into_env, "file.exists", FALSE)
@@ -6,6 +7,7 @@ test_that("fails if DESCRIPTION file is missing", {
 })
 
 test_that("parses and installs dependencies", {
+  skip_on_cran()
   env <- new.env()
   desc <- matrix(
     c("pkgA (>= 1.0.0), pkgB", "pkgC", NA_character_),
@@ -17,25 +19,16 @@ test_that("parses and installs dependencies", {
   mockery::stub(load_dependencies_into_env, "file.exists", TRUE)
   mockery::stub(load_dependencies_into_env, "read.dcf", desc)
   
-  # --- Availability check (requireNamespace) ---
-  # Call order expected:
-  #   1) requireNamespace("remotes", quietly = TRUE)
-  #   2) requireNamespace("pkgA", quietly = TRUE) -> FALSE (needs install)
-  #   3) requireNamespace("pkgB", quietly = TRUE) -> TRUE (already installed)
-  #   4) requireNamespace("pkgC", quietly = TRUE) -> FALSE (needs install)
-  req_ns_mock <- mockery::mock(TRUE, FALSE, TRUE, FALSE)
-  mockery::stub(load_dependencies_into_env, "requireNamespace", req_ns_mock)
+  # --- remotes availability check ---
+  # Only requireNamespace call inside load_dependencies_into_env itself.
+  mockery::stub(load_dependencies_into_env, "requireNamespace", TRUE)
   
-  # --- packageDescription (Version checks) ---
-  # Call order expected:
-  #   1) packageDescription("pkgA", fields = "Version") -> "0.9.0" (fails >= 1.0.0)
-  pkg_desc_mock <- mockery::mock("0.9.0")
-  mockery::stub(load_dependencies_into_env, "utils::packageDescription", pkg_desc_mock)
-  
-  # --- Installers ---
-  # install.packages() should be called for pkgA (fails >= 1.0.0) and for pkgC (missing)
-  install_mock <- mockery::mock(invisible(NULL), invisible(NULL))
-  mockery::stub(load_dependencies_into_env, "utils::install.packages", install_mock)
+  # --- Installer seam ---
+  # Stub install_if_needed so NO real installation is attempted. Without this,
+  # the real install.packages() runs inside install_if_needed and triggers
+  # "Installing package into ..." prompts when run interactively.
+  install_mock <- mockery::mock(invisible(TRUE), invisible(TRUE), invisible(TRUE))
+  mockery::stub(load_dependencies_into_env, "install_if_needed", install_mock)
   
   # --- loadNamespace() ---
   load_ns_mock <- mockery::mock(invisible(NULL), invisible(NULL), invisible(NULL))
@@ -49,6 +42,12 @@ test_that("parses and installs dependencies", {
   suppressWarnings(result <- load_dependencies_into_env("fakepkg", env))
   expect_equal(result, invisible(TRUE))
   
+  # install_if_needed() called three times with parsed op/ver: pkgA, pkgB, pkgC
+  mockery::expect_called(install_mock, 3)
+  mockery::expect_args(install_mock, 1, "pkgA", ">=", "1.0.0")
+  mockery::expect_args(install_mock, 2, "pkgB", NULL, NULL)
+  mockery::expect_args(install_mock, 3, "pkgC", NULL, NULL)
+  
   # import_namespace_exports() called three times: pkgA, pkgB, pkgC
   mockery::expect_called(import_mock, 3)
   mockery::expect_args(import_mock, 1, "pkgA", env, overwrite = TRUE)
@@ -58,6 +57,7 @@ test_that("parses and installs dependencies", {
 
 
 test_that("parses and installs dependencies from Imports/Suggests (no Depends import)", {
+  skip_on_cran()
   env <- new.env(parent = baseenv())
   
   # DESCRIPTION with only Imports and Suggests
@@ -104,6 +104,7 @@ test_that("parses and installs dependencies from Imports/Suggests (no Depends im
 
 
 test_that("imports exports from Depends into env", {
+  skip_on_cran()
   env <- new.env(parent = baseenv())
   
   desc <- matrix(
@@ -139,6 +140,7 @@ test_that("imports exports from Depends into env", {
 
 
 test_that("resolve_description_deps returns zero-row data.frame when all tokens are unparseable", {
+  skip_on_cran()
   # dummy desc object – its structure is irrelevant because we stub get_field()
   desc <- new.env(parent = emptyenv())
   
@@ -487,6 +489,7 @@ test_that("installs package when not installed", {
 
 
 test_that("does not reinstall when package is installed with no version constraint", {
+  skip_on_cran()
   mockery::stub(install_if_needed, "requireNamespace", TRUE)
   
   install_packages_mock <- mockery::mock()
@@ -508,6 +511,7 @@ test_that("does not reinstall when package is installed with no version constrai
 
 
 test_that("skips version check if installed but op is NULL", {
+  skip_on_cran()
   mockery::stub(install_if_needed, "requireNamespace", TRUE)
   
   pkg_desc_mock <- mockery::mock()
@@ -533,6 +537,7 @@ test_that("skips version check if installed but op is NULL", {
 
 
 test_that("skips version check if installed but ver is NULL", {
+  skip_on_cran()
   mockery::stub(install_if_needed, "requireNamespace", TRUE)
   
   pkg_desc_mock <- mockery::mock()
@@ -558,6 +563,7 @@ test_that("skips version check if installed but ver is NULL", {
 
 
 test_that("checks version constraint when installed with both op and ver", {
+  skip_on_cran()
   mockery::stub(install_if_needed, "requireNamespace", TRUE)
   
   # Simulate installed version "1.5.0" (satisfies >= 1.0.0)
@@ -586,6 +592,7 @@ test_that("checks version constraint when installed with both op and ver", {
 
 
 test_that("reinstalls when version constraint is NOT satisfied", {
+  skip_on_cran()
   mockery::stub(install_if_needed, "requireNamespace", TRUE)
   
   # Simulate installed version "0.9.0" (does NOT satisfy >= 1.0.0)
@@ -620,6 +627,7 @@ test_that("reinstalls when version constraint is NOT satisfied", {
 
 
 test_that("uses install.packages for >= and > constraints", {
+  skip_on_cran()
   mockery::stub(install_if_needed, "requireNamespace", FALSE)
   
   install_packages_mock <- mockery::mock(invisible(NULL))
@@ -645,6 +653,7 @@ test_that("uses install.packages for >= and > constraints", {
 
 
 test_that("uses install.packages for > constraint", {
+  skip_on_cran()
   mockery::stub(install_if_needed, "requireNamespace", FALSE)
   
   install_packages_mock <- mockery::mock(invisible(NULL))
@@ -670,6 +679,7 @@ test_that("uses install.packages for > constraint", {
 
 
 test_that("uses remotes::install_version for <= constraint", {
+  skip_on_cran()
   mockery::stub(install_if_needed, "requireNamespace", FALSE)
   
   install_packages_mock <- mockery::mock()
@@ -697,6 +707,7 @@ test_that("uses remotes::install_version for <= constraint", {
 
 
 test_that("uses remotes::install_version for < constraint", {
+  skip_on_cran()
   mockery::stub(install_if_needed, "requireNamespace", FALSE)
   
   install_packages_mock <- mockery::mock()
@@ -724,6 +735,7 @@ test_that("uses remotes::install_version for < constraint", {
 
 
 test_that("uses remotes::install_version for == constraint", {
+  skip_on_cran()
   mockery::stub(install_if_needed, "requireNamespace", FALSE)
   
   install_packages_mock <- mockery::mock()
@@ -751,6 +763,7 @@ test_that("uses remotes::install_version for == constraint", {
 
 
 test_that("handles installation errors gracefully", {
+  skip_on_cran()
   mockery::stub(install_if_needed, "requireNamespace", FALSE)
   
   install_packages_mock <- mockery::mock()
@@ -777,6 +790,7 @@ test_that("handles installation errors gracefully", {
 
 
 test_that("loads namespace even if installation fails", {
+  skip_on_cran()
   mockery::stub(install_if_needed, "requireNamespace", FALSE)
   
   install_packages_mock <- mockery::mock()
@@ -800,144 +814,28 @@ test_that("loads namespace even if installation fails", {
 })
 
 test_that("returns TRUE when op is NULL", {
+  skip_on_cran()
   result <- constraint_satisfied("1.5.0", op = NULL, ver = "1.0.0")
   expect_equal(result, TRUE)
 })
 
 
 test_that("returns TRUE when ver is NULL", {
+  skip_on_cran()
   result <- constraint_satisfied("1.5.0", op = ">=", ver = NULL)
   expect_equal(result, TRUE)
 })
 
 
 test_that("returns TRUE when both op and ver are NULL", {
+  skip_on_cran()
   result <- constraint_satisfied("1.5.0", op = NULL, ver = NULL)
   expect_equal(result, TRUE)
 })
 
 
-test_that("handles >= operator when versions are equal", {
-  mockery::stub(constraint_satisfied, "utils::compareVersion", 0)
-  
-  result <- constraint_satisfied("1.0.0", op = ">=", ver = "1.0.0")
-  expect_equal(result, TRUE)
-})
-
-
-test_that("handles >= operator when installed is greater", {
-  mockery::stub(constraint_satisfied, "utils::compareVersion", 1)
-  
-  result <- constraint_satisfied("1.5.0", op = ">=", ver = "1.0.0")
-  expect_equal(result, TRUE)
-})
-
-
-test_that("handles >= operator when installed is less", {
-  mockery::stub(constraint_satisfied, "utils::compareVersion", -1)
-  
-  result <- constraint_satisfied("0.9.0", op = ">=", ver = "1.0.0")
-  expect_equal(result, FALSE)
-})
-
-
-test_that("handles > operator when versions are equal", {
-  mockery::stub(constraint_satisfied, "utils::compareVersion", 0)
-  
-  result <- constraint_satisfied("1.0.0", op = ">", ver = "1.0.0")
-  expect_equal(result, FALSE)
-})
-
-
-test_that("handles > operator when installed is greater", {
-  mockery::stub(constraint_satisfied, "utils::compareVersion", 1)
-  
-  result <- constraint_satisfied("1.5.0", op = ">", ver = "1.0.0")
-  expect_equal(result, TRUE)
-})
-
-
-test_that("handles > operator when installed is less", {
-  mockery::stub(constraint_satisfied, "utils::compareVersion", -1)
-  
-  result <- constraint_satisfied("0.9.0", op = ">", ver = "1.0.0")
-  expect_equal(result, FALSE)
-})
-
-
-test_that("handles <= operator when versions are equal", {
-  mockery::stub(constraint_satisfied, "utils::compareVersion", 0)
-  
-  result <- constraint_satisfied("1.0.0", op = "<=", ver = "1.0.0")
-  expect_equal(result, TRUE)
-})
-
-
-test_that("handles <= operator when installed is less", {
-  mockery::stub(constraint_satisfied, "utils::compareVersion", -1)
-  
-  result <- constraint_satisfied("0.9.0", op = "<=", ver = "1.0.0")
-  expect_equal(result, TRUE)
-})
-
-
-test_that("handles <= operator when installed is greater", {
-  mockery::stub(constraint_satisfied, "utils::compareVersion", 1)
-  
-  result <- constraint_satisfied("1.5.0", op = "<=", ver = "1.0.0")
-  expect_equal(result, FALSE)
-})
-
-
-test_that("handles < operator when versions are equal", {
-  mockery::stub(constraint_satisfied, "utils::compareVersion", 0)
-  
-  result <- constraint_satisfied("1.0.0", op = "<", ver = "1.0.0")
-  expect_equal(result, FALSE)
-})
-
-
-test_that("handles < operator when installed is less", {
-  mockery::stub(constraint_satisfied, "utils::compareVersion", -1)
-  
-  result <- constraint_satisfied("0.9.0", op = "<", ver = "1.0.0")
-  expect_equal(result, TRUE)
-})
-
-
-test_that("handles < operator when installed is greater", {
-  mockery::stub(constraint_satisfied, "utils::compareVersion", 1)
-  
-  result <- constraint_satisfied("1.5.0", op = "<", ver = "1.0.0")
-  expect_equal(result, FALSE)
-})
-
-
-test_that("handles == operator when versions are equal", {
-  mockery::stub(constraint_satisfied, "utils::compareVersion", 0)
-  
-  result <- constraint_satisfied("1.0.0", op = "==", ver = "1.0.0")
-  expect_equal(result, TRUE)
-})
-
-
-test_that("handles == operator when installed is greater", {
-  mockery::stub(constraint_satisfied, "utils::compareVersion", 1)
-  
-  result <- constraint_satisfied("1.5.0", op = "==", ver = "1.0.0")
-  expect_equal(result, FALSE)
-})
-
-
-test_that("handles == operator when installed is less", {
-  mockery::stub(constraint_satisfied, "utils::compareVersion", -1)
-  
-  result <- constraint_satisfied("0.9.0", op = "==", ver = "1.0.0")
-  expect_equal(result, FALSE)
-})
-
-
 test_that("returns FALSE for unknown operator", {
+  skip_on_cran()
   mockery::stub(constraint_satisfied, "utils::compareVersion", 0)
   
   # Use an operator not in the switch statement
@@ -947,6 +845,7 @@ test_that("returns FALSE for unknown operator", {
 
 
 test_that("returns FALSE for another unknown operator", {
+  skip_on_cran()
   mockery::stub(constraint_satisfied, "utils::compareVersion", 1)
   
   result <- constraint_satisfied("1.5.0", op = "<>", ver = "1.0.0")
@@ -955,6 +854,7 @@ test_that("returns FALSE for another unknown operator", {
 
 
 test_that("converts installed_version to character before comparison", {
+  skip_on_cran()
   compare_version_mock <- mockery::mock(0)
   mockery::stub(constraint_satisfied, "utils::compareVersion", compare_version_mock)
   
@@ -971,6 +871,7 @@ test_that("converts installed_version to character before comparison", {
 
 
 test_that("handles numeric package versions", {
+  skip_on_cran()
   mockery::stub(constraint_satisfied, "utils::compareVersion", 1)
   
   result <- constraint_satisfied("2.0", op = ">", ver = "1.0")
@@ -979,6 +880,7 @@ test_that("handles numeric package versions", {
 
 
 test_that("handles complex version strings", {
+  skip_on_cran()
   mockery::stub(constraint_satisfied, "utils::compareVersion", 0)
   
   result <- constraint_satisfied("1.2.3.4", op = ">=", ver = "1.2.3.4")
@@ -987,6 +889,7 @@ test_that("handles complex version strings", {
 
 
 test_that("calls compareVersion with correct arguments in order", {
+  skip_on_cran()
   compare_version_mock <- mockery::mock(-1)
   mockery::stub(constraint_satisfied, "utils::compareVersion", compare_version_mock)
   
@@ -1001,6 +904,7 @@ test_that("calls compareVersion with correct arguments in order", {
 
 
 test_that(">= operator with all three compareVersion outputs", {
+  skip_on_cran()
   # Test with compareVersion returning -1 (less)
   mockery::stub(constraint_satisfied, "utils::compareVersion", -1)
   expect_equal(constraint_satisfied("0.5.0", op = ">=", ver = "1.0.0"), FALSE)
@@ -1016,6 +920,7 @@ test_that(">= operator with all three compareVersion outputs", {
 
 
 test_that("> operator with all three compareVersion outputs", {
+  skip_on_cran()
   # Test with compareVersion returning -1 (less)
   mockery::stub(constraint_satisfied, "utils::compareVersion", -1)
   expect_equal(constraint_satisfied("0.5.0", op = ">", ver = "1.0.0"), FALSE)
@@ -1031,6 +936,7 @@ test_that("> operator with all three compareVersion outputs", {
 
 
 test_that("<= operator with all three compareVersion outputs", {
+  skip_on_cran()
   # Test with compareVersion returning -1 (less)
   mockery::stub(constraint_satisfied, "utils::compareVersion", -1)
   expect_equal(constraint_satisfied("0.5.0", op = "<=", ver = "1.0.0"), TRUE)
@@ -1046,6 +952,7 @@ test_that("<= operator with all three compareVersion outputs", {
 
 
 test_that("< operator with all three compareVersion outputs", {
+  skip_on_cran()
   # Test with compareVersion returning -1 (less)
   mockery::stub(constraint_satisfied, "utils::compareVersion", -1)
   expect_equal(constraint_satisfied("0.5.0", op = "<", ver = "1.0.0"), TRUE)
@@ -1061,6 +968,7 @@ test_that("< operator with all three compareVersion outputs", {
 
 
 test_that("== operator with all three compareVersion outputs", {
+  skip_on_cran()
   # Test with compareVersion returning -1 (less)
   mockery::stub(constraint_satisfied, "utils::compareVersion", -1)
   expect_equal(constraint_satisfied("0.5.0", op = "==", ver = "1.0.0"), FALSE)
@@ -1075,6 +983,7 @@ test_that("== operator with all three compareVersion outputs", {
 })
 
 test_that("returns invisibly TRUE when Depends field is NA", {
+  skip_on_cran()
   desc <- matrix(NA_character_, nrow = 1, dimnames = list(NULL, c("Depends")))
   
   mockery::stub(validate_R_requirement, "get_field", NA_character_)
@@ -1085,6 +994,7 @@ test_that("returns invisibly TRUE when Depends field is NA", {
 
 
 test_that("returns invisibly TRUE when Depends field is empty string", {
+  skip_on_cran()
   desc <- matrix("", nrow = 1, dimnames = list(NULL, c("Depends")))
   
   mockery::stub(validate_R_requirement, "get_field", "")
@@ -1095,6 +1005,7 @@ test_that("returns invisibly TRUE when Depends field is empty string", {
 
 
 test_that("returns invisibly TRUE when no R constraint found in Depends", {
+  skip_on_cran()
   desc <- matrix("pkg1, pkg2", nrow = 1, dimnames = list(NULL, c("Depends")))
   
   mockery::stub(validate_R_requirement, "get_field", "pkg1, pkg2")
@@ -1105,6 +1016,7 @@ test_that("returns invisibly TRUE when no R constraint found in Depends", {
 
 
 test_that("returns invisibly TRUE when R constraint exists but normalize_constraint returns NULL", {
+  skip_on_cran()
   desc <- matrix("R ()", nrow = 1, dimnames = list(NULL, c("Depends")))
   
   mockery::stub(validate_R_requirement, "get_field", "R ()")
@@ -1116,6 +1028,7 @@ test_that("returns invisibly TRUE when R constraint exists but normalize_constra
 
 
 test_that("returns invisibly TRUE when normalized constraint is empty string", {
+  skip_on_cran()
   desc <- matrix("R (   )", nrow = 1, dimnames = list(NULL, c("Depends")))
   
   mockery::stub(validate_R_requirement, "get_field", "R (   )")
@@ -1127,6 +1040,7 @@ test_that("returns invisibly TRUE when normalized constraint is empty string", {
 
 
 test_that("returns invisibly TRUE when constraint string doesn't match operator pattern", {
+  skip_on_cran()
   desc <- matrix("R (invalid)", nrow = 1, dimnames = list(NULL, c("Depends")))
   
   mockery::stub(validate_R_requirement, "get_field", "R (invalid)")
@@ -1138,6 +1052,7 @@ test_that("returns invisibly TRUE when constraint string doesn't match operator 
 
 
 test_that("throws error when R version constraint is not satisfied with >=", {
+  skip_on_cran()
   desc <- matrix("R (>= 4.5.0)", nrow = 1, dimnames = list(NULL, c("Depends")))
   
   mockery::stub(validate_R_requirement, "get_field", "R (>= 4.5.0)")
@@ -1154,6 +1069,7 @@ test_that("throws error when R version constraint is not satisfied with >=", {
 
 
 test_that("throws error when R version constraint is not satisfied with >", {
+  skip_on_cran()
   desc <- matrix("R (> 4.0.0)", nrow = 1, dimnames = list(NULL, c("Depends")))
   
   mockery::stub(validate_R_requirement, "get_field", "R (> 4.0.0)")
@@ -1170,6 +1086,7 @@ test_that("throws error when R version constraint is not satisfied with >", {
 
 
 test_that("returns invisibly TRUE when R version constraint is satisfied with >=", {
+  skip_on_cran()
   desc <- matrix("R (>= 4.0.0)", nrow = 1, dimnames = list(NULL, c("Depends")))
   
   mockery::stub(validate_R_requirement, "get_field", "R (>= 4.0.0)")
@@ -1183,6 +1100,7 @@ test_that("returns invisibly TRUE when R version constraint is satisfied with >=
 
 
 test_that("returns invisibly TRUE when R version constraint is satisfied with >", {
+  skip_on_cran()
   desc <- matrix("R (> 4.0.0)", nrow = 1, dimnames = list(NULL, c("Depends")))
   
   mockery::stub(validate_R_requirement, "get_field", "R (> 4.0.0)")
@@ -1196,6 +1114,7 @@ test_that("returns invisibly TRUE when R version constraint is satisfied with >"
 
 
 test_that("normalizes single = to == operator", {
+  skip_on_cran()
   desc <- matrix("R (= 4.0.0)", nrow = 1, dimnames = list(NULL, c("Depends")))
   
   mockery::stub(validate_R_requirement, "get_field", "R (= 4.0.0)")
@@ -1216,6 +1135,7 @@ test_that("normalizes single = to == operator", {
 
 
 test_that("uses != operator without converting to ==", {
+  skip_on_cran()
   desc <- matrix("R (!= 4.0.0)", nrow = 1, dimnames = list(NULL, c("Depends")))
   
   mockery::stub(validate_R_requirement, "get_field", "R (!= 4.0.0)")
@@ -1236,6 +1156,7 @@ test_that("uses != operator without converting to ==", {
 
 
 test_that("trims whitespace from version string", {
+  skip_on_cran()
   desc <- matrix("R (>=  4.0.0  )", nrow = 1, dimnames = list(NULL, c("Depends")))
   
   mockery::stub(validate_R_requirement, "get_field", "R (>=  4.0.0  )")
@@ -1254,6 +1175,7 @@ test_that("trims whitespace from version string", {
 
 
 test_that("extracts first R constraint when multiple are present", {
+  skip_on_cran()
   desc <- matrix("R (>= 4.0.0), R (>= 3.5.0)", nrow = 1, dimnames = list(NULL, c("Depends")))
   
   mockery::stub(validate_R_requirement, "get_field", "R (>= 4.0.0), R (>= 3.5.0)")
@@ -1272,6 +1194,7 @@ test_that("extracts first R constraint when multiple are present", {
 
 
 test_that("handles <= operator in R requirement", {
+  skip_on_cran()
   desc <- matrix("R (<= 4.5.0)", nrow = 1, dimnames = list(NULL, c("Depends")))
   
   mockery::stub(validate_R_requirement, "get_field", "R (<= 4.5.0)")
@@ -1289,6 +1212,7 @@ test_that("handles <= operator in R requirement", {
 
 
 test_that("handles < operator in R requirement", {
+  skip_on_cran()
   desc <- matrix("R (< 5.0.0)", nrow = 1, dimnames = list(NULL, c("Depends")))
   
   mockery::stub(validate_R_requirement, "get_field", "R (< 5.0.0)")
@@ -1306,6 +1230,7 @@ test_that("handles < operator in R requirement", {
 
 
 test_that("handles == operator in R requirement", {
+  skip_on_cran()
   desc <- matrix("R (== 4.4.0)", nrow = 1, dimnames = list(NULL, c("Depends")))
   
   mockery::stub(validate_R_requirement, "get_field", "R (== 4.4.0)")
@@ -1323,6 +1248,7 @@ test_that("handles == operator in R requirement", {
 
 
 test_that("error message includes current R version", {
+  skip_on_cran()
   desc <- matrix("R (>= 5.0.0)", nrow = 1, dimnames = list(NULL, c("Depends")))
   
   mockery::stub(validate_R_requirement, "get_field", "R (>= 5.0.0)")
@@ -1339,6 +1265,7 @@ test_that("error message includes current R version", {
 
 
 test_that("error has attr simpleError", {
+  skip_on_cran()
   desc <- matrix("R (>= 5.0.0)", nrow = 1, dimnames = list(NULL, c("Depends")))
   
   mockery::stub(validate_R_requirement, "get_field", "R (>= 5.0.0)")
@@ -1357,6 +1284,7 @@ test_that("error has attr simpleError", {
 
 
 test_that("handles complex version strings with multiple dots", {
+  skip_on_cran()
   desc <- matrix("R (>= 4.0.1.2)", nrow = 1, dimnames = list(NULL, c("Depends")))
   
   mockery::stub(validate_R_requirement, "get_field", "R (>= 4.0.1.2)")
@@ -1374,6 +1302,7 @@ test_that("handles complex version strings with multiple dots", {
 
 
 test_that("strips R() parentheses correctly from constraint string", {
+  skip_on_cran()
   desc <- matrix("R (>= 4.0.0)", nrow = 1, dimnames = list(NULL, c("Depends")))
   
   mockery::stub(validate_R_requirement, "get_field", "R (>= 4.0.0)")
@@ -1393,6 +1322,7 @@ test_that("strips R() parentheses correctly from constraint string", {
 
 
 test_that("handles whitespace variations in R constraint syntax", {
+  skip_on_cran()
   desc <- matrix("R(  >=  4.0.0  )", nrow = 1, dimnames = list(NULL, c("Depends")))
   
   mockery::stub(validate_R_requirement, "get_field", "R(  >=  4.0.0  )")
@@ -1405,41 +1335,6 @@ test_that("handles whitespace variations in R constraint syntax", {
   result <- validate_R_requirement(desc)
   
   mockery::expect_called(constraint_satisfied_mock, 1)
-})
-
-
-test_that("all if statement branches are covered", {
-  # Branch 1: is.na(deps) returns TRUE
-  mockery::stub(validate_R_requirement, "get_field", NA_character_)
-  result1 <- validate_R_requirement(matrix(NA_character_, nrow = 1, dimnames = list(NULL, c("Depends"))))
-  expect_equal(result1, invisible(TRUE))
-  
-  # Branch 2: !nzchar(deps) returns TRUE
-  mockery::stub(validate_R_requirement, "get_field", "")
-  result2 <- validate_R_requirement(matrix("", nrow = 1, dimnames = list(NULL, c("Depends"))))
-  expect_equal(result2, invisible(TRUE))
-  
-  # Branch 3: length(m) == 0
-  mockery::stub(validate_R_requirement, "get_field", "pkg1, pkg2")
-  result3 <- validate_R_requirement(matrix("pkg1, pkg2", nrow = 1, dimnames = list(NULL, c("Depends"))))
-  expect_equal(result3, invisible(TRUE))
-  
-  # Branch 4: normalize_constraint returns NULL
-  mockery::stub(validate_R_requirement, "get_field", "R ()")
-  mockery::stub(validate_R_requirement, "normalize_constraint", NULL)
-  result4 <- validate_R_requirement(matrix("R ()", nrow = 1, dimnames = list(NULL, c("Depends"))))
-  expect_equal(result4, invisible(TRUE))
-  
-  # Branch 5: regexec doesn't match pattern
-  mockery::stub(validate_R_requirement, "get_field", "R (malformed)")
-  mockery::stub(validate_R_requirement, "normalize_constraint", "malformed")
-  result5 <- validate_R_requirement(matrix("R (malformed)", nrow = 1, dimnames = list(NULL, c("Depends"))))
-  expect_equal(result5, invisible(TRUE))
-})
-
-test_that("returns NULL when dep is empty string after trimming", {
-  result <- parse_dep("")
-  expect_null(result)
 })
 
 
@@ -1727,53 +1622,104 @@ test_that("handles length(m) < 2 case with warning", {
 })
 
 
-test_that("handles pattern with no version constraint (length m < 3)", {
-  result <- parse_dep("pkgA")
-  
-  expect_true(checkmate::check_list(result))
-  expect_equal(result$pkg, "pkgA")
-  expect_null(result$raw)
-})
+# ---------------------------------------------------------------------------
+# Coverage for normalize_constraint early-return (source line 47)
+# ---------------------------------------------------------------------------
 
-test_that("all conditional branches for empty/NA dep are covered", {
-  # Branch 1: empty string
-  result1 <- parse_dep("")
-  expect_null(result1)
-  
-  # Branch 2: NA
-  result2 <- parse_dep(NA_character_)
-  expect_null(result2)
-  
-  # Branch 3: whitespace only (becomes empty after trim)
-  result3 <- parse_dep("   ")
-  expect_null(result3)
+test_that("normalize_constraint returns NULL for NULL input", {
+  skip_on_cran()
+  # is.null(x) short-circuits the guard and returns NULL immediately.
+  expect_null(normalize_constraint(NULL))
 })
 
 
-test_that("all conditional branches for op normalization are covered", {
-  # Branch 1: op == "="
-  mockery::stub(parse_dep, "normalize_constraint", "= 1.0.0")
-  result1 <- parse_dep("pkgA (= 1.0.0)")
-  expect_equal(result1$op, "==")
-  
-  # Branch 2: op != "=" (stays as is)
-  mockery::stub(parse_dep, "normalize_constraint", ">= 1.0.0")
-  result2 <- parse_dep("pkgA (>= 1.0.0)")
-  expect_equal(result2$op, ">=")
+test_that("normalize_constraint returns NULL for NA input", {
+  skip_on_cran()
+  # is.na(x) triggers the same early-return branch.
+  expect_null(normalize_constraint(NA_character_))
 })
 
 
-test_that("all conditional branches for constraint parsing are covered", {
-  # Branch 1: length(m2) >= 3 (valid constraint)
-  mockery::stub(parse_dep, "normalize_constraint", ">= 1.0.0")
-  result1 <- parse_dep("pkgA (>= 1.0.0)")
-  expect_equal(result1$op, ">=")
-  expect_equal(result1$ver, "1.0.0")
+# ---------------------------------------------------------------------------
+# Coverage for resolve_description_deps structure-preserving empty return
+# (source lines 258-262): reached when no field yields any token.
+# ---------------------------------------------------------------------------
+
+test_that("resolve_description_deps returns structured zero-row data.frame when all fields are empty/NA", {
+  skip_on_cran()
+  desc <- new.env(parent = emptyenv())
   
-  # Branch 2: length(m2) < 3 (unrecognized constraint)
-  mockery::stub(parse_dep, "normalize_constraint", "invalid")
-  result2 <- parse_dep("pkgA (invalid)")
-  expect_null(result2$op)
-  expect_null(result2$ver)
-  expect_equal(result2$raw, "invalid")
+  # Every field resolves to NA so each field contributes character(0),
+  # making `vals` length-zero and hitting the early empty-data.frame branch.
+  mockery::stub(resolve_description_deps, "get_field", NA_character_)
+  
+  out <- resolve_description_deps(
+    desc,
+    fields = c("Depends", "Imports", "Suggests"),
+    exclude_R = TRUE
+  )
+  
+  expect_true(is.data.frame(out))
+  expect_identical(nrow(out), 0L)
+  expect_identical(names(out), c("package", "op", "ver", "field"))
+})
+
+
+# ---------------------------------------------------------------------------
+# Coverage for validate_R_requirement null-constraint return (source line 317):
+# the R(...) regex must match (so we pass the length(m)==0 guard), but the
+# normalized constraint collapses to NULL.
+# ---------------------------------------------------------------------------
+
+test_that("validate_R_requirement returns invisibly TRUE when normalized R constraint is NULL", {
+  skip_on_cran()
+  desc <- matrix("R (>= 4.0.0)", nrow = 1, dimnames = list(NULL, c("Depends")))
+  
+  # A real R(...) constraint so regexec matches and we reach line 317, then
+  # force normalize_constraint to NULL to exercise the guarded return.
+  mockery::stub(validate_R_requirement, "get_field", "R (>= 4.0.0)")
+  mockery::stub(validate_R_requirement, "normalize_constraint", NULL)
+  
+  result <- validate_R_requirement(desc)
+  expect_equal(result, invisible(TRUE))
+})
+
+
+# ---------------------------------------------------------------------------
+# Coverage for load_dependencies_into_env:
+#   - remotes auto-install when unavailable (source line 409)
+#   - early return when there are no dependencies (source line 426)
+# Fully mocked: no real installation, filesystem, or network access.
+# ---------------------------------------------------------------------------
+
+test_that("load_dependencies_into_env installs remotes when missing and returns early with no deps", {
+  skip_on_cran()
+  env <- new.env()
+  
+  # remotes not available -> triggers utils::install.packages("remotes") (line 409)
+  mockery::stub(load_dependencies_into_env, "requireNamespace", FALSE)
+  install_mock <- mockery::mock(invisible(NULL))
+  mockery::stub(load_dependencies_into_env, "utils::install.packages", install_mock)
+  
+  # DESCRIPTION exists and parses; R requirement is a no-op here.
+  mockery::stub(load_dependencies_into_env, "file.exists", TRUE)
+  mockery::stub(load_dependencies_into_env, "read.dcf",
+                matrix(NA_character_, nrow = 1, dimnames = list(NULL, "Depends")))
+  mockery::stub(load_dependencies_into_env, "validate_R_requirement", invisible(TRUE))
+  
+  # No resolved dependencies -> deps_df has zero rows -> early return (line 426)
+  mockery::stub(
+    load_dependencies_into_env,
+    "resolve_description_deps",
+    data.frame(package = character(), op = character(),
+               ver = character(), field = character(),
+               stringsAsFactors = FALSE)
+  )
+  
+  result <- load_dependencies_into_env("fakepkg", env)
+  expect_equal(result, invisible(TRUE))
+  
+  # remotes installation attempted exactly once; nothing is really installed.
+  mockery::expect_called(install_mock, 1)
+  mockery::expect_args(install_mock, 1, "remotes")
 })

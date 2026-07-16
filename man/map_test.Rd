@@ -16,8 +16,10 @@ the test file. Typical columns include:
 \describe{
   \item{description}{Context or test block label derived from the test file.}
   \item{expectation}{The expectation type (e.g., `expect_equal`).}
-  \item{linerange}{Numeric vector giving the range of lines associated with
-        the expectation.}
+  \item{line1, line2}{Numeric start/end lines associated with the
+        expectation.}
+  \item{block_line1, block_line2}{Numeric start/end lines of the enclosing
+        test block (e.g., the whole `test_that()` call).}
   \item{test}{Test label (combined description and nested block label, if
         applicable).}
 }

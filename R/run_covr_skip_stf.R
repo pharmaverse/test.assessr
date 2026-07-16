@@ -454,22 +454,51 @@ create_coverage_skip_stf <- function(
   test_skip_lines <- lapply(
     split(test_skip, test_skip$file),
     function(x) {
+      # Default skip range: the individual expectation lines. This preserves the
+      # existing behaviour of skipping the failing assertions of a failing block
+      # while never touching passing blocks (they never appear in `test_skip`).
+      l1 <- x$line1
+      l2 <- x$line2
+      
+      # When a block-level span is available, expand the skip range to the whole
+      # enclosing test_that block for rows whose runtime status is ERROR. Errors
+      # are raised by non-expectation setup code (outside any expect_*() call),
+      # so commenting out only the expectation lines is not enough to stop the
+      # error from re-occurring during coverage. FAILED / SKIPPED rows keep the
+      # narrower expectation-line range.
+      if (all(c("block_line1", "block_line2") %in% names(x))) {
+        is_error <- if ("status" %in% names(x)) {
+          toupper(as.character(x$status)) == "ERROR"
+        } else {
+          rep(FALSE, nrow(x))
+        }
+        is_error[is.na(is_error)] <- FALSE
+        
+        use_block <- is_error & is.finite(x$block_line1) & is.finite(x$block_line2)
+        l1[use_block] <- x$block_line1[use_block]
+        l2[use_block] <- x$block_line2[use_block]
+      }
+      
       # keep only rows with valid finite line numbers
-      ok <- is.finite(x$line1) & is.finite(x$line2)
+      ok <- is.finite(l1) & is.finite(l2)
       
       if (!any(ok)) {
         return(integer(0))
       }
       
-      unlist(
+      lines <- unlist(
         mapply(
           seq,
-          from = x$line1[ok],
-          to   = x$line2[ok],
+          from = l1[ok],
+          to   = l2[ok],
           SIMPLIFY = FALSE
         ),
         use.names = FALSE
       )
+      
+      # De-duplicate: a block span is repeated across every expectation row of
+      # that block, so the same line can appear multiple times.
+      unique(lines)
     }
   )
   

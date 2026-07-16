@@ -17,7 +17,9 @@
 #'   \item context or description
 #'   \item test label
 #'   \item expectation type
-#'   \item line ranges associated with each expectation
+#'   \item starting and ending line numbers of the
+#'   \item starting and ending line numbers of the
+#'         enclosing test block 
 #' }
 #'
 #' Files that contain no parseable test structure are omitted. If no valid
@@ -31,7 +33,12 @@
 #'   \item{test}{The combined description and test label assigned to the
 #'         expectation.}
 #'   \item{expectation}{The expectation type detected (e.g., `expect_equal`).}
-#'   \item{linerange}{The associated line numbers for that expectation.}
+#'   \item{line1, line2}{The starting and ending line numbers of the
+#'         expectation.}
+#'   \item{block_line1, block_line2}{The starting and ending line numbers of the
+#'         enclosing test block (e.g., the whole `test_that()` call). Used to
+#'         skip an entire failing/erroring block, including non-expectation
+#'         setup code.}
 #' }
 #'
 #' This structured mapping is used by downstream STF processing functions to
@@ -369,8 +376,10 @@ nest_expect <- function(x) {
 #' \describe{
 #'   \item{description}{Context or test block label derived from the test file.}
 #'   \item{expectation}{The expectation type (e.g., `expect_equal`).}
-#'   \item{linerange}{Numeric vector giving the range of lines associated with
-#'         the expectation.}
+#'   \item{line1, line2}{Numeric start/end lines associated with the
+#'         expectation.}
+#'   \item{block_line1, block_line2}{Numeric start/end lines of the enclosing
+#'         test block (e.g., the whole `test_that()` call).}
 #'   \item{test}{Test label (combined description and nested block label, if
 #'         applicable).}
 #' }
@@ -393,8 +402,13 @@ map_test <- function(path) {
   parse_data <- utils::getParseData(parse(path, keep.source = TRUE), includeText = TRUE)
   if (is.null(parse_data)) return(NULL)
   
-  # Treat test_that and describe as top-level test blocks
-  ret <- lapply(nest_test(parse_data, token_text = "^test_that$|^describe$|^tar_test$"), function(xx) {
+  # Treat test_that and describe as top-level test blocks. Keep the parsed
+  # block data around so we can later derive the full source-line span of each
+  # enclosing block (needed to skip a whole failing/erroring block, including
+  # non-expectation setup code, not just its expectations).
+  blocks <- nest_test(parse_data, token_text = "^test_that$|^describe$|^tar_test$")
+  
+  ret <- lapply(blocks, function(xx) {
     # Identify the function name (e.g., test_that or describe)
     SYMB <- xx$text[grep("^SYMBOL_FUNCTION_CALL$", xx$token)[1]]
     
@@ -417,10 +431,14 @@ map_test <- function(path) {
     )
   })
   
-  # Remove empty elements
-  ret <- ret[sapply(ret, length) > 0]
+  # Remove empty elements, keeping `blocks` aligned with `ret`
+  keep <- vapply(ret, length, integer(1)) > 0
+  ret <- ret[keep]
+  blocks <- blocks[keep]
   if (length(ret) == 0) return(NULL)
   
+  # Full source-line span of each enclosing block (aligned with `ret`)
+  block_spans <- lapply(blocks, block_line_span)
   
   # Ensure unique names for test blocks
   names(ret) <- make.unique(names(ret), sep = "_")
@@ -428,9 +446,40 @@ map_test <- function(path) {
   # Add 'description' column to each test block
   ret <- lapply(names(ret), unrowname, ret = ret, label = "description")
   
+  # Attach the enclosing block span to every expectation row of that block
+  ret <- Map(function(df, span) {
+    df$block_line1 <- span[[1]]
+    df$block_line2 <- span[[2]]
+    df
+  }, ret, block_spans)
+  
   # Combine all test blocks into a single data.frame
   ret <- do.call("rbind", ret)
   return(ret)
+}
+
+#' Compute the source-line span of a parsed test block
+#'
+#' Given the parse rows for a single test block (as produced by
+#' \code{nest_test()}), returns the first and last source lines the block
+#' occupies. This span is used by skip logic to comment out an entire failing
+#' or erroring \code{test_that()} block, including any non-expectation setup
+#' code, so that coverage can still be computed on the remaining tests.
+#'
+#' @param block A \code{data.frame} of parse rows for one test block. Expected
+#'   (but not required) to contain \code{line1} and \code{line2} columns.
+#'
+#' @return A list of length two: the starting line and ending line of the block
+#'   (both integers), or \code{NA_integer_} when line information is unavailable.
+#'
+#' @keywords internal
+#' @noRd
+block_line_span <- function(block) {
+  l1 <- suppressWarnings(min(block$line1, na.rm = TRUE))
+  l2 <- suppressWarnings(max(block$line2, na.rm = TRUE))
+  if (!is.finite(l1)) l1 <- NA_integer_
+  if (!is.finite(l2)) l2 <- NA_integer_
+  list(as.integer(l1), as.integer(l2))
 }
 
 
