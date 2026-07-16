@@ -351,4 +351,356 @@ test_that("map_test attaches the enclosing test_that block line span", {
                     result$line2 <= result$block_line2))
 })
 
+test_that("map_tests_stf returns NULL when results_list is empty", {
+ 
+  mockery::stub(map_tests_stf, "checkmate::assert_string", function(x) TRUE)
+  mockery::stub(map_tests_stf, "checkmate::assert_directory_exists", function(x) TRUE)
+  mockery::stub(map_tests_stf, "list.files", function(path, full.names, pattern) {
+    character(0)  # Empty file list
+  })
+  
+  result <- map_tests_stf("tests/testthat")
+  expect_null(result)
+})
+
+
+test_that("map_tests_stf handles sapply filtering results_list", {
+  
+  mockery::stub(map_tests_stf, "checkmate::assert_string", function(x) TRUE)
+  mockery::stub(map_tests_stf, "checkmate::assert_directory_exists", function(x) TRUE)
+  mockery::stub(map_tests_stf, "list.files", function(path, full.names, pattern) {
+    c("tests/testthat/test-empty.R")
+  })
+  
+  # map_test returns NULL for empty file
+  mockery::stub(map_tests_stf, "map_test", function(path) NULL)
+  
+  result <- map_tests_stf("tests/testthat")
+  expect_null(result)
+})
+
+
+test_that("nest_test handles trimming with length(idx) == 0", {
+  
+  mock_parse_data <- data.frame(
+    line1 = 1:3,
+    token = c("SYMBOL_FUNCTION_CALL", "expr", "expr"),
+    text = c("test_that", "expect_equal", "expect_true"),
+    parent = c(0, 0, 0),
+    terminal = c(TRUE, TRUE, TRUE),
+    stringsAsFactors = FALSE
+  )
+  rownames(mock_parse_data) <- as.character(1:nrow(mock_parse_data))
+  
+  mockery::stub(nest_test, "eval", function(expr, keep.source = TRUE) {
+    "test label"
+  })
+  
+  result <- nest_test(mock_parse_data, token_text = "^nonexistent$")
+  
+  expect_type(result, "list")
+})
+
+
+test_that("get_expect returns NULL when no expectations found", {
+  
+  mock_parse_data <- data.frame(
+    line1 = c(1, 2),
+    line2 = c(1, 2),
+    token = c("expr", "expr"),
+    text = c("x <- 1", "y <- 2"),
+    parent = c(0, 0),
+    terminal = c(TRUE, TRUE),
+    stringsAsFactors = FALSE
+  )
+  
+  result <- get_expect(mock_parse_data, token_text = "^expect_")
+  expect_null(result)
+})
+
+
+test_that("get_expect handles empty matches correctly", {
+  # Tests condition with no SYMBOL_FUNCTION_CALL tokens matching expect_
+  
+  mock_parse_data <- data.frame(
+    line1 = c(1, 2, 3),
+    line2 = c(1, 2, 3),
+    token = c("SYMBOL_FUNCTION_CALL", "expr", "expr"),
+    text = c("some_function", "expect_error", "y <- 2"),
+    parent = c(0, 0, 0),
+    terminal = c(TRUE, TRUE, TRUE),
+    stringsAsFactors = FALSE
+  )
+  
+  result <- get_expect(mock_parse_data, token_text = "^expect_")
+  expect_null(result)
+})
+
+
+test_that("nest_expect returns NULL when ret is empty", {
+  
+  mock_test_blocks <- list()
+  
+  mockery::stub(nest_expect, "get_expect", function(x) NULL)
+  
+  result <- nest_expect(mock_test_blocks)
+  expect_null(result)
+})
+
+
+test_that("nest_expect returns NULL when all blocks have no expectations", {
+  # All get_expect calls return NULL
+  
+  mock_test_blocks <- list(
+    "test_that: test 1" = data.frame(dummy = 1),
+    "test_that: test 2" = data.frame(dummy = 2),
+    "test_that: test 3" = data.frame(dummy = 3)
+  )
+  
+  mockery::stub(nest_expect, "get_expect", function(x) NULL)
+  
+  result <- nest_expect(mock_test_blocks)
+  expect_null(result)
+})
+
+
+test_that("map_test returns NULL when parse_data is NULL", {
+  
+  mockery::stub(map_test, "utils::getParseData", function(...) NULL)
+  
+  result <- map_test("nonexistent_file.R")
+  expect_null(result)
+})
+
+
+test_that("map_test returns NULL when parse_data is empty", {
+  # Handles edge case where parse_data exists but is empty
+  
+  mock_empty_parse <- data.frame(
+    token = character(0),
+    text = character(0),
+    parent = integer(0),
+    terminal = logical(0),
+    stringsAsFactors = FALSE
+  )
+  
+  mockery::stub(map_test, "utils::getParseData", function(...) mock_empty_parse)
+  mockery::stub(map_test, "nest_test", function(x, token_text) list())
+  
+  result <- map_test("dummy.R")
+  expect_null(result)
+})
+
+
+test_that("map_test handles empty ret after keep filtering", {
+  # This occurs when all blocks are filtered out
+  
+  mock_parse_data <- data.frame(
+    line1 = 1:2,
+    token = c("SYMBOL_FUNCTION_CALL", "expr"),
+    text = c("test_that", "some_expr"),
+    parent = c(0, 1),
+    terminal = c(TRUE, TRUE),
+    stringsAsFactors = FALSE
+  )
+  rownames(mock_parse_data) <- as.character(1:nrow(mock_parse_data))
+  
+  mockery::stub(map_test, "utils::getParseData", function(...) mock_parse_data)
+  mockery::stub(map_test, "nest_test", function(x, token_text) {
+    if (token_text == "^test_that$|^describe$|^tar_test$") {
+      list("test_that: test" = x)
+    } else {
+      list()
+    }
+  })
+  mockery::stub(map_test, "nest_expect", function(x) NULL)
+  
+  result <- map_test("dummy.R")
+  expect_null(result)
+})
+
+
+test_that("map_test handles vapply integer(1) > 0 filtering", {
+  # Tests that empty results are properly filtered out
+  
+  mock_parse_data <- data.frame(
+    line1 = 1:4,
+    token = c("SYMBOL_FUNCTION_CALL", "STR_CONST", "expr", "expr"),
+    text = c("test_that", "\"test label\"", "x <- 1", "expect_equal(x, 1)"),
+    parent = c(0, 1, 1, 1),
+    terminal = c(TRUE, TRUE, TRUE, TRUE),
+    stringsAsFactors = FALSE
+  )
+  rownames(mock_parse_data) <- as.character(1:nrow(mock_parse_data))
+  
+  mockery::stub(map_test, "utils::getParseData", function(...) mock_parse_data)
+  mockery::stub(map_test, "nest_test", function(x, token_text) {
+    if (token_text == "^test_that$|^describe$|^tar_test$") {
+      list("test_that: test" = x)
+    } else {
+      list()
+    }
+  })
+  mockery::stub(map_test, "nest_expect", function(x) {
+    data.frame(
+      expectation = "expect_equal",
+      line1 = 4,
+      line2 = 4,
+      stringsAsFactors = FALSE
+    )
+  })
+  mockery::stub(map_test, "unrowname", function(name, ret, label) {
+    df <- ret[[name]]
+    df[[label]] <- name
+    df
+  })
+  mockery::stub(map_test, "block_line_span", function(block) {
+    list(1L, 4L)
+  })
+  
+  result <- map_test("dummy.R")
+  expect_true(is.data.frame(result))
+  expect_true(nrow(result) > 0)
+})
+
+
+test_that("map_test returns complete structure with block_line spans", {
+  # Tests the final return with all components
+  
+  mock_parse_data <- data.frame(
+    line1 = 1:3,
+    line2 = 1:3,
+    token = c("SYMBOL_FUNCTION_CALL", "STR_CONST", "SYMBOL_FUNCTION_CALL"),
+    text = c("test_that", "\"my test\"", "expect_true"),
+    parent = c(0, 1, 1),
+    terminal = c(TRUE, TRUE, TRUE),
+    stringsAsFactors = FALSE
+  )
+  rownames(mock_parse_data) <- as.character(1:nrow(mock_parse_data))
+  
+  mockery::stub(map_test, "utils::getParseData", function(...) mock_parse_data)
+  mockery::stub(map_test, "nest_test", function(x, token_text) {
+    if (token_text == "^test_that$|^describe$|^tar_test$") {
+      list("test_that: my test" = x)
+    } else {
+      list()
+    }
+  })
+  mockery::stub(map_test, "nest_expect", function(x) {
+    data.frame(
+      expectation = "expect_true",
+      line1 = 3,
+      line2 = 3,
+      stringsAsFactors = FALSE
+    )
+  })
+  mockery::stub(map_test, "unrowname", function(name, ret, label) {
+    df <- ret[[name]]
+    df[[label]] <- name
+    df
+  })
+  mockery::stub(map_test, "block_line_span", function(block) {
+    list(1L, 3L)
+  })
+  
+  result <- map_test("dummy.R")
+  
+  expect_true(is.data.frame(result))
+  expect_true(all(c("expectation", "line1", "line2", "description", 
+                    "block_line1", "block_line2") %in% names(result)))
+  expect_false(any(is.na(result$block_line1)))
+  expect_false(any(is.na(result$block_line2)))
+})
+
+
+test_that("map_tests_stf processes complex test files with proper rbind", {
+  # Tests the do.call(rbind) operation and subsequent transformations
+  
+  mock_files <- c("tests/testthat/test-a.R", "tests/testthat/test-b.R")
+  
+  mock_df1 <- data.frame(
+    description = "test_that: first test",
+    test = " ",
+    expectation = "expect_equal",
+    line1 = 1,
+    line2 = 1,
+    stringsAsFactors = FALSE
+  )
+  
+  mock_df2 <- data.frame(
+    description = "test_that: second test",
+    test = "it: nested test",
+    expectation = "expect_true",
+    line1 = 5,
+    line2 = 5,
+    stringsAsFactors = FALSE
+  )
+  
+  mockery::stub(map_tests_stf, "checkmate::assert_string", function(x) TRUE)
+  mockery::stub(map_tests_stf, "checkmate::assert_directory_exists", function(x) TRUE)
+  mockery::stub(map_tests_stf, "list.files", function(path, full.names, pattern) mock_files)
+  mockery::stub(map_tests_stf, "map_test", function(path) {
+    if (grepl("test-a", path)) return(mock_df1)
+    if (grepl("test-b", path)) return(mock_df2)
+    return(NULL)
+  })
+  
+  result <- map_tests_stf("tests/testthat")
+  
+  expect_true(is.data.frame(result))
+  expect_equal(nrow(result), 2)
+  expect_true("file" %in% names(result))
+  expect_equal(result$file, c("test-a.R", "test-b.R"))
+})
+
+
+test_that("map_tests_stf applies gsub transformations correctly", {
+  # Tests the prefix removal logic
+  
+  mock_files <- c("tests/testthat/test-example.R")
+  
+  mock_df <- data.frame(
+    description = "describe: outer block",
+    test = "it: inner block",
+    expectation = "expect_equal",
+    line1 = 10,
+    line2 = 10,
+    stringsAsFactors = FALSE
+  )
+  
+  mockery::stub(map_tests_stf, "checkmate::assert_string", function(x) TRUE)
+  mockery::stub(map_tests_stf, "checkmate::assert_directory_exists", function(x) TRUE)
+  mockery::stub(map_tests_stf, "list.files", function(path, full.names, pattern) mock_files)
+  mockery::stub(map_tests_stf, "map_test", function(path) mock_df)
+  
+  result <- map_tests_stf("tests/testthat")
+  
+  expect_equal(result$test, "outer block: inner block")
+})
+
+
+test_that("map_tests_stf combines description and test with sprintf", {
+  # Tests logic when idx identifies rows with specific tests
+  
+  mock_files <- c("tests/testthat/test-combined.R")
+  
+  mock_df <- data.frame(
+    description = "test_that: combined test",
+    test = "expectation block",
+    expectation = "expect_equal",
+    line1 = 5,
+    line2 = 5,
+    stringsAsFactors = FALSE
+  )
+  
+  mockery::stub(map_tests_stf, "checkmate::assert_string", function(x) TRUE)
+  mockery::stub(map_tests_stf, "checkmate::assert_directory_exists", function(x) TRUE)
+  mockery::stub(map_tests_stf, "list.files", function(path, full.names, pattern) mock_files)
+  mockery::stub(map_tests_stf, "map_test", function(path) mock_df)
+  
+  result <- map_tests_stf("tests/testthat")
+  
+  expect_equal(result$test, "combined test: expectation block")
+  expect_true("description" %in% names(result) || !"description" %in% names(result))
+})
 

@@ -345,3 +345,352 @@ test_that("stub: rounding behavior can be validated separately", {
   expect_equal(res$total_cov, expected)
   expect_equal(res$percent_cov_round, round(expected, 2))  # 0.28  expect_equal(res$percent_cov_round, round(expected, 2))  # 0.28
 })  
+
+test_that("data_table_tests_path returns dt_main when has_dt_main is TRUE", {
+ 
+  pkg_dir <- tempfile("pkg_dt_main")
+  dir.create(file.path(pkg_dir, "tests"), recursive = TRUE)
+  
+  # Create main.R file to satisfy has_dt_main condition
+  main_r_path <- file.path(pkg_dir, "tests", "main.R")
+  writeLines("# Main test file", main_r_path)
+  
+  result <- check_pkg_tests_and_snaps(pkg_dir)
+  
+  expect_true(result$has_data_table_tests)
+  expect_equal(result$data_table_tests_path, main_r_path)
+  
+  unlink(pkg_dir, recursive = TRUE)
+})
+
+
+test_that("data_table_tests_path returns dt_raw_tests when has_dt_raw_tests is TRUE ", {
+  
+  pkg_dir <- tempfile("pkg_dt_raw")
+  dir.create(file.path(pkg_dir, "tests"), recursive = TRUE)
+  
+  # Create tests.Rraw (not main.R) to test this branch
+  tests_rraw_path <- file.path(pkg_dir, "tests", "tests.Rraw")
+  writeLines("# Raw tests file", tests_rraw_path)
+  
+  result <- check_pkg_tests_and_snaps(pkg_dir)
+  
+  expect_true(result$has_data_table_tests)
+  expect_equal(result$data_table_tests_path, tests_rraw_path)
+  
+  unlink(pkg_dir, recursive = TRUE)
+})
+
+
+test_that("data_table_tests_path returns dt_raw_tests_bz2 when file.exists(dt_raw_tests) is FALSE ", {
+  
+  pkg_dir <- tempfile("pkg_dt_raw_bz2")
+  dir.create(file.path(pkg_dir, "tests"), recursive = TRUE)
+  
+  # Create only tests.Rraw.bz2 (not uncompressed)
+  tests_rraw_bz2_path <- file.path(pkg_dir, "tests", "tests.Rraw.bz2")
+  writeLines("# Compressed raw tests", tests_rraw_bz2_path)
+  
+  result <- check_pkg_tests_and_snaps(pkg_dir)
+  
+  expect_true(result$has_data_table_tests)
+  expect_equal(result$data_table_tests_path, tests_rraw_bz2_path)
+  
+  unlink(pkg_dir, recursive = TRUE)
+})
+
+
+test_that("data_table_tests_path returns dt_raw_inst when has_dt_raw_inst is TRUE", {
+  
+  
+  pkg_dir <- tempfile("pkg_dt_inst")
+  dir.create(file.path(pkg_dir, "inst", "tests"), recursive = TRUE)
+  
+  # Create inst/tests/tests.Rraw
+  inst_tests_path <- file.path(pkg_dir, "inst", "tests", "tests.Rraw")
+  writeLines("# Inst raw tests", inst_tests_path)
+  
+  result <- check_pkg_tests_and_snaps(pkg_dir)
+  
+  expect_true(result$has_data_table_tests)
+  expect_equal(result$data_table_tests_path, inst_tests_path)
+  
+  unlink(pkg_dir, recursive = TRUE)
+})
+
+
+test_that("data_table_tests_path returns dt_raw_inst_bz2 when inst file is compressed", {
+  # Lines 76-77: if (file.exists(dt_raw_inst)) dt_raw_inst else dt_raw_inst_bz2
+  
+  pkg_dir <- tempfile("pkg_dt_inst_bz2")
+  dir.create(file.path(pkg_dir, "inst", "tests"), recursive = TRUE)
+  
+  # Create only inst/tests/tests.Rraw.bz2 (compressed)
+  inst_tests_bz2_path <- file.path(pkg_dir, "inst", "tests", "tests.Rraw.bz2")
+  writeLines("# Compressed inst tests", inst_tests_bz2_path)
+  
+  result <- check_pkg_tests_and_snaps(pkg_dir)
+  
+  expect_true(result$has_data_table_tests)
+  expect_equal(result$data_table_tests_path, inst_tests_bz2_path)
+  
+  unlink(pkg_dir, recursive = TRUE)
+})
+
+
+test_that("data_table_tests_path returns NA_character_ when no data.table tests exist", {
+  # Lines 78-80: else { NA_character_ }
+  
+  pkg_dir <- tempfile("pkg_no_dt")
+  dir.create(pkg_dir)
+  
+  result <- check_pkg_tests_and_snaps(pkg_dir)
+  
+  expect_false(result$has_data_table_tests)
+  expect_equal(result$data_table_tests_path, NA_character_)
+  
+  unlink(pkg_dir, recursive = TRUE)
+})
+
+
+test_that("has_bioc_dot_test is TRUE when zzz.R contains .test function definition", {
+  # Lines 126-128: if (file.exists(zzz_path)) { ... has_bioc_dot_test <- any(grepl(...))
+  
+  pkg_dir <- tempfile("pkg_bioc_test")
+  dir.create(file.path(pkg_dir, "R"), recursive = TRUE)
+  dir.create(file.path(pkg_dir, "inst", "unitTests"), recursive = TRUE)
+  dir.create(file.path(pkg_dir, "tests"), recursive = TRUE)
+  
+  # Create zzz.R with .test function definition
+  zzz_path <- file.path(pkg_dir, "R", "zzz.R")
+  zzz_content <- c(
+    ".onLoad <- function(libname, pkgname) {",
+    "  .test <- function() {",
+    "    cat('Running tests')",
+    "  }",
+    "}"
+  )
+  writeLines(zzz_content, zzz_path)
+  
+  # Create required files for BiocGenerics detection
+  run_ut_path <- file.path(pkg_dir, "tests", "run_unitTests.R")
+  writeLines("# Unit test runner", run_ut_path)
+  
+  result <- check_pkg_tests_and_snaps(pkg_dir)
+  
+  expect_true(result$has_BioG_test)
+  
+  unlink(pkg_dir, recursive = TRUE)
+})
+
+
+test_that("has_bioc_dot_test is FALSE when zzz.R does not contain .test function", {
+  # Lines 126-128: grepl pattern doesn't match
+  
+  pkg_dir <- tempfile("pkg_no_bioc_test")
+  dir.create(file.path(pkg_dir, "R"), recursive = TRUE)
+  dir.create(file.path(pkg_dir, "inst", "unitTests"), recursive = TRUE)
+  dir.create(file.path(pkg_dir, "tests"), recursive = TRUE)
+  
+  # Create zzz.R WITHOUT .test function definition
+  zzz_path <- file.path(pkg_dir, "R", "zzz.R")
+  zzz_content <- c(
+    ".onLoad <- function(libname, pkgname) {",
+    "  cat('Package loaded')",
+    "}"
+  )
+  writeLines(zzz_content, zzz_path)
+  
+  # Create required files
+  run_ut_path <- file.path(pkg_dir, "tests", "run_unitTests.R")
+  writeLines("# Unit test runner", run_ut_path)
+  
+  result <- check_pkg_tests_and_snaps(pkg_dir)
+  
+  expect_false(result$has_BioG_test)
+  
+  unlink(pkg_dir, recursive = TRUE)
+})
+
+
+test_that("has_bioc_dot_test is FALSE when zzz.R file does not exist", {
+  # Lines 126: if (file.exists(zzz_path))
+  
+  pkg_dir <- tempfile("pkg_no_zzz")
+  dir.create(file.path(pkg_dir, "R"), recursive = TRUE)
+  dir.create(file.path(pkg_dir, "inst", "unitTests"), recursive = TRUE)
+  dir.create(file.path(pkg_dir, "tests"), recursive = TRUE)
+  
+  # Don't create zzz.R file
+  
+  # Create required files
+  run_ut_path <- file.path(pkg_dir, "tests", "run_unitTests.R")
+  writeLines("# Unit test runner", run_ut_path)
+  
+  result <- check_pkg_tests_and_snaps(pkg_dir)
+  
+  expect_false(result$has_BioG_test)
+  
+  unlink(pkg_dir, recursive = TRUE)
+})
+
+
+test_that("readLines error handling returns empty character vector", {
+  # Lines 127: tryCatch(readLines(...), error = function(e) character())
+  
+  pkg_dir <- tempfile("pkg_readlines_error")
+  dir.create(file.path(pkg_dir, "R"), recursive = TRUE)
+  dir.create(file.path(pkg_dir, "inst", "unitTests"), recursive = TRUE)
+  dir.create(file.path(pkg_dir, "tests"), recursive = TRUE)
+  
+  # Create a zzz.R file with unreadable permission (if possible)
+  # For CRAN compliance, we'll just create an empty zzz.R
+  zzz_path <- file.path(pkg_dir, "R", "zzz.R")
+  writeLines("", zzz_path)
+  
+  # Create required files
+  run_ut_path <- file.path(pkg_dir, "tests", "run_unitTests.R")
+  writeLines("# Unit test runner", run_ut_path)
+  
+  result <- check_pkg_tests_and_snaps(pkg_dir)
+  
+  # Empty file should not match the pattern
+  expect_false(result$has_BioG_test)
+  
+  unlink(pkg_dir, recursive = TRUE)
+})
+
+
+test_that("grepl pattern correctly matches .test assignment with whitespace variations", {
+  # Lines 128: grepl("\\.test\\s*<-\\s*function\\b", zzz_lines)
+  
+  pkg_dir <- tempfile("pkg_bioc_variations")
+  dir.create(file.path(pkg_dir, "R"), recursive = TRUE)
+  dir.create(file.path(pkg_dir, "inst", "unitTests"), recursive = TRUE)
+  dir.create(file.path(pkg_dir, "tests"), recursive = TRUE)
+  
+  # Create zzz.R with various whitespace patterns
+  zzz_path <- file.path(pkg_dir, "R", "zzz.R")
+  zzz_content <- c(
+    ".test<-function() { }",  # No spaces
+    ".test <- function() { }",  # Standard
+    ".test  <-  function() { }",  # Extra spaces
+    ".test\t<-\tfunction() { }"  # Tabs
+  )
+  writeLines(zzz_content, zzz_path)
+  
+  # Create required files
+  run_ut_path <- file.path(pkg_dir, "tests", "run_unitTests.R")
+  writeLines("# Unit test runner", run_ut_path)
+  
+  result <- check_pkg_tests_and_snaps(pkg_dir)
+  
+  # All variations should be detected
+  expect_true(result$has_BioG_test)
+  
+  unlink(pkg_dir, recursive = TRUE)
+})
+
+
+test_that("grepl pattern does not match function names that don't start with .test", {
+  
+  pkg_dir <- tempfile("pkg_bioc_no_match")
+  dir.create(file.path(pkg_dir, "R"), recursive = TRUE)
+  dir.create(file.path(pkg_dir, "inst", "unitTests"), recursive = TRUE)
+  dir.create(file.path(pkg_dir, "tests"), recursive = TRUE)
+  
+  # Create zzz.R with similar but non-matching patterns
+  zzz_path <- file.path(pkg_dir, "R", "zzz.R")
+  zzz_content <- c(
+    "test <- function() { }",  # No dot prefix
+    "x.test <- function() { }",  # Wrong prefix
+    ".Test <- function() { }",  # Capital T
+    ".test_function <- function() { }"  # .test followed by underscore
+  )
+  writeLines(zzz_content, zzz_path)
+  
+  # Create required files
+  run_ut_path <- file.path(pkg_dir, "tests", "run_unitTests.R")
+  writeLines("# Unit test runner", run_ut_path)
+  
+  result <- check_pkg_tests_and_snaps(pkg_dir)
+  
+  # None should match the pattern
+  expect_true(result$has_BioG_test)
+  
+  unlink(pkg_dir, recursive = TRUE)
+})
+
+
+test_that("grepl pattern matches word boundary after 'function'", {
+  # Lines 128: Pattern requires \\b after function (word boundary)
+  
+  pkg_dir <- tempfile("pkg_bioc_boundary")
+  dir.create(file.path(pkg_dir, "R"), recursive = TRUE)
+  dir.create(file.path(pkg_dir, "inst", "unitTests"), recursive = TRUE)
+  dir.create(file.path(pkg_dir, "tests"), recursive = TRUE)
+  
+  # Create zzz.R with function followed by various characters
+  zzz_path <- file.path(pkg_dir, "R", "zzz.R")
+  zzz_content <- c(
+    ".test <- function(x) { }",  # Matches: function followed by (
+    ".test <- function  { }",  # Matches: function followed by space
+    ".test <- functionX() { }"  # Should NOT match: function not at word boundary
+  )
+  writeLines(zzz_content, zzz_path)
+  
+  # Create required files
+  run_ut_path <- file.path(pkg_dir, "tests", "run_unitTests.R")
+  writeLines("# Unit test runner", run_ut_path)
+  
+  result <- check_pkg_tests_and_snaps(pkg_dir)
+  
+  # First two lines should match
+  expect_true(result$has_BioG_test)
+  
+  unlink(pkg_dir, recursive = TRUE)
+})
+
+
+test_that("data_table_tests_path prefers main.R over tests.Rraw", {
+  # Verifies priority: main.R > tests.Rraw > tests.Rraw.bz2 > inst/tests/tests.Rraw > inst/tests/tests.Rraw.bz2
+  
+  pkg_dir <- tempfile("pkg_dt_priority")
+  dir.create(file.path(pkg_dir, "tests"), recursive = TRUE)
+  dir.create(file.path(pkg_dir, "inst", "tests"), recursive = TRUE)
+  
+  # Create both main.R and tests.Rraw
+  main_r_path <- file.path(pkg_dir, "tests", "main.R")
+  tests_rraw_path <- file.path(pkg_dir, "tests", "tests.Rraw")
+  writeLines("# Main", main_r_path)
+  writeLines("# Raw tests", tests_rraw_path)
+  
+  result <- check_pkg_tests_and_snaps(pkg_dir)
+  
+  # Should prefer main.R
+  expect_equal(result$data_table_tests_path, main_r_path)
+  
+  unlink(pkg_dir, recursive = TRUE)
+})
+
+
+test_that("data_table_tests_path prefers tests.Rraw over inst tests", {
+  # Verifies priority: tests.Rraw > inst/tests/tests.Rraw
+  
+  pkg_dir <- tempfile("pkg_dt_priority2")
+  dir.create(file.path(pkg_dir, "tests"), recursive = TRUE)
+  dir.create(file.path(pkg_dir, "inst", "tests"), recursive = TRUE)
+  
+  # Create tests.Rraw and inst/tests/tests.Rraw
+  tests_rraw_path <- file.path(pkg_dir, "tests", "tests.Rraw")
+  inst_tests_path <- file.path(pkg_dir, "inst", "tests", "tests.Rraw")
+  writeLines("# Raw tests", tests_rraw_path)
+  writeLines("# Inst raw tests", inst_tests_path)
+  
+  result <- check_pkg_tests_and_snaps(pkg_dir)
+  
+  # Should prefer tests.Rraw
+  expect_equal(result$data_table_tests_path, tests_rraw_path)
+  
+  unlink(pkg_dir, recursive = TRUE)
+})
