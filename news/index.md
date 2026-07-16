@@ -1,5 +1,15 @@
 # Changelog
 
+## test.assessr 2.1.3
+
+### New Features
+
+- fix CRAN issue with `test-run_covr_skip_stf`
+- increase test coverage for `test-map_tests_stf`,
+  `test-unittest_methods`
+- fix handling with test skip and setup
+- update processing for `Rcpp` package
+
 ## test.assessr 2.1.2
 
 CRAN release: 2026-06-10
