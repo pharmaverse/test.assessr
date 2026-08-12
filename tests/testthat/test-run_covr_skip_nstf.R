@@ -1,5 +1,3 @@
-
-
 test_that("run_covr_skip_nstf returns correct structure on success", {
   
   # ------------------------------------------
@@ -851,6 +849,38 @@ test_that("returns problems for tests that error or warn", {
   expect_true(grepl("^error", result$issue_type))
 })
 
+
+test_that("is_tinytest branch: probes files with tinytest::run_test_file and flags failed expectations", {
+  mapping <- data.frame(
+    test_file = c("test-pass.R", "test-fail.R"),
+    stringsAsFactors = FALSE
+  )
+  pkg_source_path <- "mockpkg"
+  tiny_base_dir   <- "mockpkg/inst/tinytest"
+  
+  mockery::stub(check_covr_skip_nstf, "normalizePath",
+                function(path, ..., mustWork = FALSE) path)
+  mockery::stub(check_covr_skip_nstf, "file.path",
+                function(...) paste(..., sep = "/"))
+  mockery::stub(check_covr_skip_nstf, "file.exists",
+                function(...) TRUE)
+  
+  mockery::stub(check_covr_skip_nstf, "tinytest::run_test_file", function(file, at_home, color) {
+    expect_true(at_home)
+    expect_false(color)
+    structure(list(file = file), class = "tinytests")
+  })
+  mockery::stub(check_covr_skip_nstf, "tinytest::any_fail", function(tt) {
+    grepl("test-fail\\.R$", tt$file)
+  })
+  
+  result <- check_covr_skip_nstf(pkg_source_path, mapping, base_dir = tiny_base_dir)
+  
+  expect_equal(nrow(result), 1)
+  expect_equal(result$test_file, "test-fail.R")
+  expect_equal(result$issue_type, "failed expectation")
+})
+
 test_that("drops NA rows in mapping", {
   mapping <- data.frame(test_file = c("test1.R", NA), stringsAsFactors = FALSE)
   pkg_source_path <- "mockpkg"
@@ -1299,6 +1329,94 @@ test_that("tinytest branch builds files under inst/tinytest, filters runner and 
   expect_true(captured_args$at_home)
   expect_false(captured_args$color)
   
+})
+
+
+test_that("tinytest branch: tinytest_runner_paths from test_pkg_data are normalized and excluded from test_files_clean", {
+  run_fn <- getFromNamespace("run_covr_skip_nstf", "test.assessr")
+  
+  # --- Arrange ---
+  pkg_source_path <- file.path(tempdir(), "mockpkg_tiny_runner_paths")
+  dir.create(file.path(pkg_source_path, "tests"), recursive = TRUE, showWarnings = FALSE)
+  withr::defer(unlink(pkg_source_path, recursive = TRUE, force = TRUE))
+  
+  pkg_name <- "mockpkg"
+  
+  mapping <- data.frame(
+    source_file = c("a.R", "b.R"),
+    test_file   = c("test-a.R", "custom-runner.R"),
+    stringsAsFactors = FALSE
+  )
+  problems <- data.frame(test_file = NA_character_, issue_type = "No tests skipped", stringsAsFactors = FALSE)
+  no_tests_df <- data.frame(source_file = character(0), stringsAsFactors = FALSE)
+  coverage_obj <- structure(list(), class = "coverage")
+  
+  runner_path <- file.path(pkg_source_path, "inst", "tinytest", "custom-runner.R")
+  test_a_path <- file.path(pkg_source_path, "inst", "tinytest", "test-a.R")
+  
+  mockery::stub(run_fn, "get_pkg_name", function(...) pkg_name)
+  mockery::stub(
+    run_fn, "get_nstf_test_path",
+    function(...) list(tinytest = file.path(pkg_source_path, "tests"))
+  )
+  mockery::stub(run_fn, "normalizePath", function(path, ...) path)
+  mockery::stub(
+    run_fn, "dir.exists",
+    function(path) path %in% c(pkg_source_path,
+                               file.path(pkg_source_path, "inst"),
+                               file.path(pkg_source_path, "inst", "tinytest"))
+  )
+  mockery::stub(run_fn, "file.exists", function(paths) paths %in% c(runner_path, test_a_path))
+  
+  mockery::stub(run_fn, "get_source_test_mapping_nstf", function(...) mapping)
+  mockery::stub(run_fn, "check_covr_skip_nstf", function(...) problems)
+  mockery::stub(run_fn, "get_function_no_tests", function(...) no_tests_df)
+  
+  fake_ns <- new.env(parent = emptyenv())
+  mockery::stub(run_fn, "pkgload::load_all", function(...) NULL)
+  mockery::stub(run_fn, "asNamespace", function(...) fake_ns)
+  mockery::stub(run_fn, "ls", function(...) character(0))
+  mockery::stub(run_fn, "get", function(obj, envir) obj)
+  mockery::stub(run_fn, "load_dependencies_into_env", function(...) TRUE)
+  mockery::stub(run_fn, "load_package_datasets", function(...) character(0))
+  mockery::stub(run_fn, "load_base_r_packages_into_env", function(...) TRUE)
+  
+  mockery::stub(
+    run_fn, "create_tinytest_coverage",
+    function(...) list(coverage = coverage_obj, tinytests = list(ok = TRUE))
+  )
+  mockery::stub(
+    run_fn, "covr::coverage_to_list",
+    function(...) list(filecoverage = matrix(1), totalcoverage = 90)
+  )
+  
+  captured <- new.env(parent = emptyenv())
+  mockery::stub(
+    run_fn, "create_nstf_covr_list",
+    function(coverage, pkg_name, no_tests_df, test_files_clean, skip_tests, problems) {
+      captured$test_files_clean <- test_files_clean
+      list(
+        res_cov = list(name = pkg_name, coverage = list(filecoverage = matrix(1), totalcoverage = 90)),
+        total_cov = 90,
+        functions_no_tests = no_tests_df,
+        tests_skipped = character(0),
+        tests_passing = test_files_clean
+      )
+    }
+  )
+  
+  mockery::stub(run_fn, "cleanup_and_return_null", function(...) invisible(NULL))
+  
+  cov_env <- new.env(parent = emptyenv())
+  
+  # --- Act ---
+  test_pkg_data <- tpd(has_tinytest = TRUE, tinytest_runner_paths = runner_path)
+  result <- run_fn(pkg_source_path, test_pkg_data, cov_env = cov_env)
+  
+  # --- Assert ---
+  expect_false(runner_path %in% captured$test_files_clean)
+  expect_setequal(captured$test_files_clean, test_a_path)
+  expect_equal(result$total_cov, 90)
 })
 
 
@@ -1801,6 +1919,159 @@ test_that("base layout: success path collects coverage", {
 })
 
 
+test_that("has_tests_base: builds probe_mapping and test_files_clean from every real test file, bypassing the fuzzy mapping", {
+  run_fn <- getFromNamespace("run_covr_skip_nstf", "test.assessr")
+  
+  # --- Arrange ---
+  pkg_source_path <- file.path(tempdir(), "mockpkg_base_files")
+  tests_dir <- file.path(pkg_source_path, "tests")
+  dir.create(tests_dir, recursive = TRUE, showWarnings = FALSE)
+  withr::defer(unlink(pkg_source_path, recursive = TRUE, force = TRUE))
+  
+  pkg_name <- "mockpkg"
+  
+  # The fuzzy mapping finds nothing (e.g. a scenario-named test suite, not
+  # source-file-named): if test_files_clean still used clean_mapping$test_file
+  # here, it would end up empty.
+  mapping <- data.frame(
+    source_file = "rpart.R", test_file = NA_character_, stringsAsFactors = FALSE
+  )
+  no_tests_df <- data.frame(source_file = character(0), stringsAsFactors = FALSE)
+  real_test_files <- c("cost.R", "priors.R")
+  
+  mockery::stub(run_fn, "get_pkg_name", function(...) pkg_name)
+  mockery::stub(run_fn, "get_nstf_test_path", function(...) list(base = tests_dir))
+  mockery::stub(run_fn, "normalizePath", function(path, ...) path)
+  mockery::stub(run_fn, "get_source_test_mapping_nstf", function(...) mapping)
+  mockery::stub(
+    run_fn, "list.files",
+    function(path, pattern = NULL, full.names = FALSE, recursive = FALSE, ...) {
+      if (identical(path, tests_dir)) return(real_test_files)
+      character(0)
+    }
+  )
+  
+  captured <- new.env(parent = emptyenv())
+  mockery::stub(run_fn, "check_covr_skip_nstf", function(pkg_source_path, mapping, ...) {
+    captured$probe_mapping <- mapping
+    data.frame(test_file = NA_character_, issue_type = "No tests skipped", stringsAsFactors = FALSE)
+  })
+  mockery::stub(run_fn, "get_function_no_tests", function(...) no_tests_df)
+  
+  fake_ns <- new.env(parent = emptyenv())
+  mockery::stub(run_fn, "dir.exists", function(path) path %in% c(pkg_source_path, tests_dir))
+  mockery::stub(run_fn, "pkgload::load_all", function(...) NULL)
+  mockery::stub(run_fn, "asNamespace", function(...) fake_ns)
+  mockery::stub(run_fn, "ls", function(...) character(0))
+  mockery::stub(run_fn, "get", function(obj, envir) obj)
+  mockery::stub(run_fn, "load_dependencies_into_env", function(...) TRUE)
+  mockery::stub(run_fn, "load_package_datasets", function(...) character(0))
+  mockery::stub(run_fn, "load_base_r_packages_into_env", function(...) TRUE)
+  
+  mockery::stub(
+    run_fn, "create_base_tests_coverage",
+    function(pkg_source_path, pkg_name, abs_tests) {
+      list(coverage = structure(list(), class = "coverage"))
+    }
+  )
+  
+  captured_clean <- new.env(parent = emptyenv())
+  mockery::stub(
+    run_fn, "create_nstf_covr_list",
+    function(coverage, pkg_name, no_tests_df, test_files_clean, skip_tests, problems) {
+      captured_clean$test_files_clean <- test_files_clean
+      list(
+        res_cov = list(name = pkg_name, coverage = list(filecoverage = matrix(1), totalcoverage = 47.38)),
+        total_cov = 47.38,
+        functions_no_tests = no_tests_df,
+        tests_skipped = character(0),
+        tests_passing = test_files_clean
+      )
+    }
+  )
+  
+  mockery::stub(run_fn, "cleanup_and_return_null", function(...) invisible(NULL))
+  
+  cov_env <- new.env(parent = emptyenv())
+  
+  # --- Act ---
+  test_pkg_data <- tpd(has_tests_base = TRUE)
+  result <- run_fn(pkg_source_path, test_pkg_data, cov_env = cov_env)
+  
+  # --- Assert ---
+  # probe_mapping was built from the real file list, not the (empty) fuzzy mapping
+  expect_identical(captured$probe_mapping$test_file, real_test_files)
+  expect_identical(captured$probe_mapping$source_file, real_test_files)
+  
+  # test_files_clean was built from base_test_files, not clean_mapping$test_file
+  expect_identical(captured_clean$test_files_clean, file.path(tests_dir, real_test_files))
+  
+  expect_equal(result$total_cov, 47.38)
+})
+
+
+test_that("falls back to a zero-coverage default list when res_cov ends up NULL", {
+  run_fn <- getFromNamespace("run_covr_skip_nstf", "test.assessr")
+  
+  # --- Arrange ---
+  pkg_source_path <- file.path(tempdir(), "mockpkg_no_res_cov")
+  dir.create(file.path(pkg_source_path, "tests", "testthat"), recursive = TRUE, showWarnings = FALSE)
+  withr::defer(unlink(pkg_source_path, recursive = TRUE, force = TRUE))
+  
+  pkg_name <- "mockpkg"
+  mapping <- data.frame(source_file = "a.R", test_file = "t-a.R", stringsAsFactors = FALSE)
+  problems <- data.frame(test_file = NA_character_, issue_type = "No tests skipped", stringsAsFactors = FALSE)
+  no_tests_df <- data.frame(source_file = character(0), stringsAsFactors = FALSE)
+  
+  mockery::stub(run_fn, "get_pkg_name", function(...) pkg_name)
+  mockery::stub(
+    run_fn, "get_nstf_test_path",
+    function(...) list(testthat = file.path(pkg_source_path, "tests", "testthat"))
+  )
+  mockery::stub(run_fn, "normalizePath", function(path, ...) path)
+  mockery::stub(run_fn, "get_source_test_mapping_nstf", function(...) mapping)
+  mockery::stub(run_fn, "check_covr_skip_nstf", function(...) problems)
+  mockery::stub(run_fn, "get_function_no_tests", function(...) no_tests_df)
+  
+  fake_ns <- new.env(parent = emptyenv())
+  mockery::stub(run_fn, "pkgload::load_all", function(...) NULL)
+  mockery::stub(run_fn, "asNamespace", function(...) fake_ns)
+  mockery::stub(run_fn, "ls", function(...) character(0))
+  mockery::stub(run_fn, "get", function(obj, envir) obj)
+  mockery::stub(run_fn, "load_dependencies_into_env", function(...) TRUE)
+  mockery::stub(run_fn, "load_package_datasets", function(...) character(0))
+  mockery::stub(run_fn, "load_base_r_packages_into_env", function(...) TRUE)
+  
+  # Primary coverage attempt fails -> coverage becomes NULL via cleanup_and_return_null
+  mockery::stub(run_fn, "covr::environment_coverage", function(...) stop("boom"))
+  
+  # Fallback covr::package_coverage() also fails -> covr stays NULL
+  mockery::stub(run_fn, "withr::with_dir", function(new, code) stop("fallback boom"))
+  
+  # Only one create_nstf_covr_list() call happens here (coverage is NULL throughout),
+  # and it reports res_cov = NULL, forcing the default zero-coverage branch.
+  mockery::stub(run_fn, "create_nstf_covr_list", function(...) list(res_cov = NULL))
+  
+  mockery::stub(run_fn, "cleanup_and_return_null", function(msg = NULL, env = NULL) invisible(NULL))
+  
+  cov_env <- new.env(parent = emptyenv())
+  
+  # --- Act ---
+  expect_message(
+    result <- run_fn(pkg_source_path, tpd(), cov_env = cov_env),
+    "No test coverage for this configuration"
+  )
+  
+  # --- Assert ---
+  expect_equal(result$total_cov, 0)
+  expect_equal(result$res_cov$coverage$totalcoverage, 0)
+  expect_equal(result$res_cov$errors, "No testthat or testit configuration")
+  expect_true(is.na(result$res_cov$notes))
+  expect_equal(unname(result$res_cov$coverage$filecoverage[1, 1]), 0)
+  expect_equal(rownames(result$res_cov$coverage$filecoverage), "No functions tested")
+})
+
+
 test_that("returns testthat path when tests/testthat exists", {
   # IMPORTANT: if your function gates on has_testthat, set it TRUE
   test_pkg_data <- tpd(has_testthat = TRUE)
@@ -1844,6 +2115,43 @@ test_that("returns testit path when tests/testit exists", {
   
   expect_named(res, c("testit", "nonstandard_testit_root"))
   expect_identical(res$testit, "IGNORED/testit")
+})
+
+test_that("get_nstf_test_path resolves a relative tinytest_dir against pkg_root", {
+  # Real, empty temp directory - no mocking needed: dir.exists()/list.files() on
+  # a real (if mostly empty) directory tree behave exactly as production expects.
+  pkg_root <- file.path(tempdir(), "mockpkg_reltiny")
+  testdir  <- file.path(pkg_root, "tests")
+  dir.create(testdir, recursive = TRUE, showWarnings = FALSE)
+  withr::defer(unlink(pkg_root, recursive = TRUE, force = TRUE))
+  
+  test_pkg_data <- tpd(has_tinytest = TRUE)
+  test_pkg_data$tinytest_dir <- "custom/tinytest"
+  
+  res <- get_nstf_test_path(test_pkg_data, testdir)
+  
+  expect_identical(
+    res$tinytest,
+    normalizePath(file.path(pkg_root, "custom", "tinytest"), winslash = "/", mustWork = FALSE)
+  )
+})
+
+test_that("get_nstf_test_path uses an absolute tinytest_dir as-is", {
+  pkg_root <- file.path(tempdir(), "mockpkg_abstiny")
+  testdir  <- file.path(pkg_root, "tests")
+  dir.create(testdir, recursive = TRUE, showWarnings = FALSE)
+  withr::defer(unlink(pkg_root, recursive = TRUE, force = TRUE))
+  
+  abs_tinytest_dir <- normalizePath(file.path(tempdir(), "abs_tinytest_dir"),
+                                    winslash = "/", mustWork = FALSE)
+  
+  test_pkg_data <- tpd(has_tinytest = TRUE)
+  test_pkg_data$tinytest_dir <- abs_tinytest_dir
+  
+  res <- get_nstf_test_path(test_pkg_data, testdir)
+  
+  # already absolute - used as-is, not joined onto pkg_root
+  expect_identical(res$tinytest, abs_tinytest_dir)
 })
 
 ############################################
@@ -2081,6 +2389,46 @@ dir_exists_only <- function(truthy) {
 # ----------------------------------------------------------------------
 
 
+test_that("create_tinytest_coverage errors when pkg_source_path does not exist", {
+  missing_path <- file.path(tempdir(), "does_not_exist_pkg_src")
+  expect_error(
+    create_tinytest_coverage(
+      missing_path, "somepkg",
+      tiny_dir = file.path(missing_path, "inst", "tinytest")
+    ),
+    regexp = "Package source path does not exist"
+  )
+})
+
+test_that("create_tinytest_coverage errors when the tinytest directory does not exist", {
+  pkg_source_path <- file.path(tempdir(), "mockpkg_no_tinytest_dir")
+  dir.create(pkg_source_path, recursive = TRUE, showWarnings = FALSE)
+  withr::defer(unlink(pkg_source_path, recursive = TRUE, force = TRUE))
+  
+  expect_error(
+    create_tinytest_coverage(
+      pkg_source_path, "somepkg",
+      tiny_dir = file.path(pkg_source_path, "inst", "tinytest")
+    ),
+    regexp = "tinytest directory not found"
+  )
+})
+
+test_that("create_tinytest_coverage errors when the package namespace is not loaded", {
+  pkg_source_path <- file.path(tempdir(), "mockpkg_ns_not_loaded")
+  tiny_dir <- file.path(pkg_source_path, "inst", "tinytest")
+  dir.create(tiny_dir, recursive = TRUE, showWarnings = FALSE)
+  withr::defer(unlink(pkg_source_path, recursive = TRUE, force = TRUE))
+  
+  expect_error(
+    create_tinytest_coverage(
+      pkg_source_path, "definitely_not_a_loaded_pkg_zzz",
+      tiny_dir = tiny_dir
+    ),
+    regexp = "is not loaded"
+  )
+})
+
 test_that("runs tinytest coverage successfully and returns structure", {
   pkg_source_path <- "/pkg"
   tiny_dir        <- "/pkg/inst/tinytest"
@@ -2118,19 +2466,14 @@ test_that("runs tinytest coverage successfully and returns structure", {
     stop("unexpected asNamespace(", name, ")")
   })
   
-  # Per-file run: enumerate files, then run each in isolation.
-  test_a <- file.path(tiny_dir, "test_a.R")
-  test_b <- file.path(tiny_dir, "test_b.R")
-  mockery::stub(create_tinytest_coverage, "list.files",
-                function(path, pattern, full.names) c(test_a, test_b))
-  
-  fake_tt_a <- list(results = "a ok")
-  fake_tt_b <- list(results = "b ok")
-  mockery::stub(create_tinytest_coverage, "tinytest::run_test_file",
-                function(file, at_home, color) {
+  # tinytest runner returns a known value
+  fake_tt_result <- list(results = "all good")
+  mockery::stub(create_tinytest_coverage, "tinytest::run_test_dir",
+                function(dir, at_home, color) {
+                  expect_identical(dir, tiny_dir)
                   expect_true(at_home)
                   expect_false(color)
-                  if (identical(file, test_a)) fake_tt_a else fake_tt_b
+                  fake_tt_result
                 })
   
   # Ensure NOT_CRAN is restored (set to a known value before)
@@ -2142,14 +2485,9 @@ test_that("runs tinytest coverage successfully and returns structure", {
   
   # ---- Assertions ----
   expect_type(res, "list")
-  expect_true(all(c("coverage", "tinytests", "test_files", "file_status") %in% names(res)))
-  expect_identical(res$coverage, fake_coverage)
-  
-  # Per-file results keyed by full path; both files ran OK.
-  expect_identical(res$test_files, sort(c(test_a, test_b)))
-  expect_identical(unname(res$file_status[c(test_a, test_b)]), c("ok", "ok"))
-  expect_identical(res$tinytests[[test_a]], fake_tt_a)
-  expect_identical(res$tinytests[[test_b]], fake_tt_b)
+  expect_true(all(c("coverage", "tinytests") %in% names(res)))
+  expect_identical(res$coverage,  fake_coverage)
+  expect_identical(res$tinytests, fake_tt_result)
   
   # covr hooks invoked
   expect_true(isTRUE(flags$trace))
@@ -2160,7 +2498,7 @@ test_that("runs tinytest coverage successfully and returns structure", {
   expect_identical(Sys.getenv("NOT_CRAN"), "OLD_VALUE")
 })
 
-test_that("per-file isolation: one file's fatal error does not stop the rest", {
+test_that("cleanup (reset_traces/clear_counters) runs even if tinytest fails", {
   pkg_source_path <- "/pkg"
   tiny_dir        <- "/pkg/inst/tinytest"
   pkg_name        <- "mypkg"
@@ -2191,42 +2529,23 @@ test_that("per-file isolation: one file's fatal error does not stop the rest", {
     stop("unexpected asNamespace(", name, ")")
   })
   
-  # Two files; the first throws a fatal top-level error (mimics Rcpp
-  # test_system.R), the second still runs.
-  test_bad  <- file.path(tiny_dir, "test_bad.R")
-  test_good <- file.path(tiny_dir, "test_good.R")
-  mockery::stub(create_tinytest_coverage, "list.files",
-                function(path, pattern, full.names) c(test_bad, test_good))
-  
-  fake_tt_good <- list(results = "good ok")
-  mockery::stub(create_tinytest_coverage, "tinytest::run_test_file",
-                function(file, at_home, color) {
-                  if (identical(file, test_bad)) stop("tinytest boom")
-                  fake_tt_good
-                })
+  # tinytest fails
+  mockery::stub(create_tinytest_coverage, "tinytest::run_test_dir",
+                function(dir, at_home, color) stop("tinytest boom"))
   
   # Preserve & check NOT_CRAN restoration
   Sys.unsetenv("NOT_CRAN")
   on.exit(Sys.unsetenv("NOT_CRAN"), add = TRUE)
   
-  # The bad file's error is caught and the run continues.
-  expect_message(
-    res <- create_tinytest_coverage(pkg_source_path, pkg_name, tiny_dir = tiny_dir),
-    regexp = "stopped early"
+  expect_error(
+    create_tinytest_coverage(pkg_source_path, pkg_name, tiny_dir = tiny_dir),
+    regexp = "tinytest boom"
   )
   
-  # Coverage is computed from accumulated counters; status reflects per file.
-  expect_type(res, "list")
-  expect_identical(res$coverage, fake_coverage)
-  expect_true(startsWith(res$file_status[[test_bad]], "error:"))
-  expect_identical(res$file_status[[test_good]], "ok")
-  expect_identical(res$tinytests[[test_good]], fake_tt_good)
-  expect_null(res$tinytests[[test_bad]])
-  
-  # Cleanup still ran (trace before, reset/clear via on.exit)
-  expect_true(isTRUE(flags$trace))
-  expect_true(isTRUE(flags$reset))
-  expect_true(isTRUE(flags$clear))
+  # Cleanup ran due to on.exit
+  expect_true(isTRUE(flags$trace))  # trace happened before error
+  expect_true(isTRUE(flags$reset))  # reset_traces() in on.exit
+  expect_true(isTRUE(flags$clear))  # clear_counters() in on.exit
   
   # NOT_CRAN restored to unset (since it was unset before)
   expect_identical(Sys.getenv("NOT_CRAN", unset = NA), NA_character_)
@@ -3033,999 +3352,3 @@ test_that("create_nstf_covr_list handles coverage_to_list() error branch", {
   # notes = NA (as in error branch)
   expect_true(is.na(result$res_cov$notes))
 })
-
-
-# ---------------------------------------------------------------------------
-# run_covr_skip_nstf(): per-file `file_status` refinement (tinytest branch)
-#
-# These tests exercise the bookkeeping block that runs when
-# create_tinytest_coverage() returns a `file_status` vector keyed by full file
-# path. The block re-derives `test_files_clean`, `skip_tests`, and `problems`
-# from the actual per-file run results, so we capture the arguments that flow
-# into create_nstf_covr_list() to assert the refinement happened.
-#
-# All inputs are mocked (mockery::stub), no real package is loaded, the global
-# environment is never touched, and temp dirs are removed on exit.
-# ---------------------------------------------------------------------------
-
-test_that("file_status with all 'ok' sets test_files_clean to ok paths and leaves problems untouched", {
-  
-  run_fn <- run_covr_skip_nstf
-  
-  pkg_source_path <- file.path(tempdir(), "mockpkg_fs_ok")
-  dir.create(file.path(pkg_source_path, "tests"), recursive = TRUE, showWarnings = FALSE)
-  withr::defer(unlink(pkg_source_path, recursive = TRUE, force = TRUE))
-  
-  pkg_name <- "mockpkg"
-  tt_dir      <- file.path(pkg_source_path, "inst", "tinytest")
-  test_a_path <- file.path(tt_dir, "test-a.R")
-  test_b_path <- file.path(tt_dir, "test-b.R")
-  
-  mapping <- data.frame(
-    source_file = c("x.R", "y.R"),
-    test_file   = c("test-a.R", "test-b.R"),
-    stringsAsFactors = FALSE
-  )
-  
-  problems_in <- data.frame(
-    test_file  = NA_character_,
-    issue_type = "No tests skipped",
-    stringsAsFactors = FALSE
-  )
-  
-  file_status <- stats::setNames(c("ok", "ok"), c(test_a_path, test_b_path))
-  
-  # ---- Stubs (hermetic) ----
-  mockery::stub(run_fn, "get_pkg_name", function(...) pkg_name)
-  mockery::stub(run_fn, "get_nstf_test_path",
-                function(...) list(tinytest = file.path(pkg_source_path, "tests")))
-  mockery::stub(run_fn, "normalizePath", function(path, ...) path)
-  mockery::stub(run_fn, "file.exists", function(paths) rep(TRUE, length(paths)))
-  mockery::stub(run_fn, "get_source_test_mapping_nstf", function(...) mapping)
-  mockery::stub(run_fn, "check_covr_skip_nstf", function(...) problems_in)
-  mockery::stub(run_fn, "get_function_no_tests",
-                function(...) data.frame(source_file = character(0), stringsAsFactors = FALSE))
-  
-  fake_ns <- new.env(parent = emptyenv())
-  mockery::stub(run_fn, "pkgload::load_all", function(...) NULL)
-  mockery::stub(run_fn, "asNamespace", function(name) fake_ns)
-  mockery::stub(run_fn, "ls", function(...) character(0))
-  mockery::stub(run_fn, "get", function(obj, envir) obj)
-  mockery::stub(run_fn, "load_package_datasets", function(...) character(0))
-  mockery::stub(run_fn, "load_dependencies_into_env", function(...) TRUE)
-  mockery::stub(run_fn, "load_base_r_packages_into_env", function(...) TRUE)
-  
-  mockery::stub(
-    run_fn, "create_tinytest_coverage",
-    function(...) list(
-      coverage    = list(x = 1),
-      tinytests   = list(),
-      test_files  = c(test_a_path, test_b_path),
-      file_status = file_status
-    )
-  )
-  
-  captured <- new.env(parent = emptyenv())
-  mockery::stub(
-    run_fn, "create_nstf_covr_list",
-    function(coverage, pkg_name, no_tests_df, test_files_clean, skip_tests, problems) {
-      captured$test_files_clean <- test_files_clean
-      captured$skip_tests       <- skip_tests
-      captured$problems         <- problems
-      list(
-        res_cov   = list(name = pkg_name,
-                         coverage = list(filecoverage = matrix(1), totalcoverage = 50)),
-        total_cov = 50
-      )
-    }
-  )
-  
-  mockery::stub(run_fn, "cleanup_and_return_null", function(...) invisible(NULL))
-  
-  cov_env <- new.env(parent = emptyenv())
-  test_pkg_data <- tpd(has_tinytest = TRUE)
-  
-  result <- suppressMessages(
-    run_fn(pkg_source_path, test_pkg_data, cov_env = cov_env)
-  )
-  
-  # ok paths become test_files_clean; no errors => no skips; problems unchanged
-  expect_setequal(captured$test_files_clean, c(test_a_path, test_b_path))
-  expect_length(captured$skip_tests, 0L)
-  expect_identical(captured$problems, problems_in)
-  expect_equal(result$total_cov, 50)
-})
-
-
-test_that("file_status with an error and only 'No tests skipped' problems replaces problems with the error df", {
-  
-  run_fn <- run_covr_skip_nstf
-  
-  pkg_source_path <- file.path(tempdir(), "mockpkg_fs_err_noskip")
-  dir.create(file.path(pkg_source_path, "tests"), recursive = TRUE, showWarnings = FALSE)
-  withr::defer(unlink(pkg_source_path, recursive = TRUE, force = TRUE))
-  
-  pkg_name <- "mockpkg"
-  tt_dir      <- file.path(pkg_source_path, "inst", "tinytest")
-  test_a_path <- file.path(tt_dir, "test-a.R")
-  test_b_path <- file.path(tt_dir, "test-b.R")
-  
-  mapping <- data.frame(
-    source_file = c("x.R", "y.R"),
-    test_file   = c("test-a.R", "test-b.R"),
-    stringsAsFactors = FALSE
-  )
-  
-  # Only the placeholder "No tests skipped" row => no_skip is TRUE
-  problems_in <- data.frame(
-    test_file  = NA_character_,
-    issue_type = "No tests skipped",
-    stringsAsFactors = FALSE
-  )
-  
-  file_status <- stats::setNames(c("ok", "error: boom"), c(test_a_path, test_b_path))
-  
-  mockery::stub(run_fn, "get_pkg_name", function(...) pkg_name)
-  mockery::stub(run_fn, "get_nstf_test_path",
-                function(...) list(tinytest = file.path(pkg_source_path, "tests")))
-  mockery::stub(run_fn, "normalizePath", function(path, ...) path)
-  mockery::stub(run_fn, "file.exists", function(paths) rep(TRUE, length(paths)))
-  mockery::stub(run_fn, "get_source_test_mapping_nstf", function(...) mapping)
-  mockery::stub(run_fn, "check_covr_skip_nstf", function(...) problems_in)
-  mockery::stub(run_fn, "get_function_no_tests",
-                function(...) data.frame(source_file = character(0), stringsAsFactors = FALSE))
-  
-  fake_ns <- new.env(parent = emptyenv())
-  mockery::stub(run_fn, "pkgload::load_all", function(...) NULL)
-  mockery::stub(run_fn, "asNamespace", function(name) fake_ns)
-  mockery::stub(run_fn, "ls", function(...) character(0))
-  mockery::stub(run_fn, "get", function(obj, envir) obj)
-  mockery::stub(run_fn, "load_package_datasets", function(...) character(0))
-  mockery::stub(run_fn, "load_dependencies_into_env", function(...) TRUE)
-  mockery::stub(run_fn, "load_base_r_packages_into_env", function(...) TRUE)
-  
-  mockery::stub(
-    run_fn, "create_tinytest_coverage",
-    function(...) list(
-      coverage    = list(x = 1),
-      tinytests   = list(),
-      test_files  = c(test_a_path),
-      file_status = file_status
-    )
-  )
-  
-  captured <- new.env(parent = emptyenv())
-  mockery::stub(
-    run_fn, "create_nstf_covr_list",
-    function(coverage, pkg_name, no_tests_df, test_files_clean, skip_tests, problems) {
-      captured$test_files_clean <- test_files_clean
-      captured$skip_tests       <- skip_tests
-      captured$problems         <- problems
-      list(
-        res_cov   = list(name = pkg_name,
-                         coverage = list(filecoverage = matrix(1), totalcoverage = 40)),
-        total_cov = 40
-      )
-    }
-  )
-  
-  mockery::stub(run_fn, "cleanup_and_return_null", function(...) invisible(NULL))
-  
-  cov_env <- new.env(parent = emptyenv())
-  test_pkg_data <- tpd(has_tinytest = TRUE)
-  
-  result <- suppressMessages(
-    run_fn(pkg_source_path, test_pkg_data, cov_env = cov_env)
-  )
-  
-  expect_identical(captured$test_files_clean, test_a_path)
-  expect_identical(captured$skip_tests, "test-b.R")
-  
-  # problems is replaced wholesale by the per-file error data frame
-  expect_s3_class(captured$problems, "data.frame")
-  expect_equal(nrow(captured$problems), 1L)
-  expect_identical(captured$problems$test_file, "test-b.R")
-  expect_identical(captured$problems$issue_type, "error: boom")
-  expect_equal(result$total_cov, 40)
-})
-
-
-test_that("file_status with an error and pre-existing skips appends the error df to problems", {
-  
-  run_fn <- run_covr_skip_nstf
-  
-  pkg_source_path <- file.path(tempdir(), "mockpkg_fs_err_rbind")
-  dir.create(file.path(pkg_source_path, "tests"), recursive = TRUE, showWarnings = FALSE)
-  withr::defer(unlink(pkg_source_path, recursive = TRUE, force = TRUE))
-  
-  pkg_name <- "mockpkg"
-  tt_dir      <- file.path(pkg_source_path, "inst", "tinytest")
-  test_a_path <- file.path(tt_dir, "test-a.R")
-  test_b_path <- file.path(tt_dir, "test-b.R")
-  
-  mapping <- data.frame(
-    source_file = c("x.R", "y.R"),
-    test_file   = c("test-a.R", "test-b.R"),
-    stringsAsFactors = FALSE
-  )
-  
-  # A genuine skip already present => no_skip is FALSE => rbind path
-  problems_in <- data.frame(
-    test_file  = "test-c.R",
-    issue_type = "skipped",
-    stringsAsFactors = FALSE
-  )
-  
-  file_status <- stats::setNames(c("ok", "error: kaboom"), c(test_a_path, test_b_path))
-  
-  mockery::stub(run_fn, "get_pkg_name", function(...) pkg_name)
-  mockery::stub(run_fn, "get_nstf_test_path",
-                function(...) list(tinytest = file.path(pkg_source_path, "tests")))
-  mockery::stub(run_fn, "normalizePath", function(path, ...) path)
-  mockery::stub(run_fn, "file.exists", function(paths) rep(TRUE, length(paths)))
-  mockery::stub(run_fn, "get_source_test_mapping_nstf", function(...) mapping)
-  mockery::stub(run_fn, "check_covr_skip_nstf", function(...) problems_in)
-  mockery::stub(run_fn, "get_function_no_tests",
-                function(...) data.frame(source_file = character(0), stringsAsFactors = FALSE))
-  
-  fake_ns <- new.env(parent = emptyenv())
-  mockery::stub(run_fn, "pkgload::load_all", function(...) NULL)
-  mockery::stub(run_fn, "asNamespace", function(name) fake_ns)
-  mockery::stub(run_fn, "ls", function(...) character(0))
-  mockery::stub(run_fn, "get", function(obj, envir) obj)
-  mockery::stub(run_fn, "load_package_datasets", function(...) character(0))
-  mockery::stub(run_fn, "load_dependencies_into_env", function(...) TRUE)
-  mockery::stub(run_fn, "load_base_r_packages_into_env", function(...) TRUE)
-  
-  mockery::stub(
-    run_fn, "create_tinytest_coverage",
-    function(...) list(
-      coverage    = list(x = 1),
-      tinytests   = list(),
-      test_files  = c(test_a_path),
-      file_status = file_status
-    )
-  )
-  
-  captured <- new.env(parent = emptyenv())
-  mockery::stub(
-    run_fn, "create_nstf_covr_list",
-    function(coverage, pkg_name, no_tests_df, test_files_clean, skip_tests, problems) {
-      captured$test_files_clean <- test_files_clean
-      captured$skip_tests       <- skip_tests
-      captured$problems         <- problems
-      list(
-        res_cov   = list(name = pkg_name,
-                         coverage = list(filecoverage = matrix(1), totalcoverage = 30)),
-        total_cov = 30
-      )
-    }
-  )
-  
-  mockery::stub(run_fn, "cleanup_and_return_null", function(...) invisible(NULL))
-  
-  cov_env <- new.env(parent = emptyenv())
-  test_pkg_data <- tpd(has_tinytest = TRUE)
-  
-  result <- suppressMessages(
-    run_fn(pkg_source_path, test_pkg_data, cov_env = cov_env)
-  )
-  
-  expect_identical(captured$test_files_clean, test_a_path)
-  expect_identical(captured$skip_tests, "test-b.R")
-  
-  # error df is appended to the existing skips (test-c.R first, then test-b.R)
-  expect_s3_class(captured$problems, "data.frame")
-  expect_equal(nrow(captured$problems), 2L)
-  expect_identical(captured$problems$test_file, c("test-c.R", "test-b.R"))
-  expect_identical(captured$problems$issue_type, c("skipped", "error: kaboom"))
-  expect_equal(result$total_cov, 30)
-})
-
-
-# ---------------------------------------------------------------------------
-# prepare_tinytest_dev_includes(): full-coverage suite
-#
-# These tests cover every branch of the helper without touching the real
-# process environment or filesystem. dir.exists()/normalizePath() and the
-# Sys.* env accessors are stubbed (mockery::stub) against a local in-memory
-# store, so nothing leaks into .GlobalEnv or the user's environment and there
-# is nothing to clean up on disk.
-# ---------------------------------------------------------------------------
-
-test_that("prepare_tinytest_dev_includes returns a no-op for invalid pkg_source_path", {
-  
-  prep <- prepare_tinytest_dev_includes
-  
-  invalids <- list(
-    non_character = 123,
-    multi_length  = c("a", "b"),
-    na_value      = NA_character_,
-    empty_string  = ""
-  )
-  
-  for (val in invalids) {
-    res <- prep(val, tiny_dir = "x")
-    expect_type(res, "list")
-    expect_identical(res$include_dirs, character(0))
-    expect_type(res$teardown, "closure")
-    expect_null(res$teardown())
-  }
-})
-
-
-test_that("prepare_tinytest_dev_includes returns a no-op when inst/include is absent", {
-  
-  prep <- prepare_tinytest_dev_includes
-  
-  mockery::stub(prep, "dir.exists", function(path) FALSE)
-  
-  res <- prep("/some/pkg", tiny_dir = "/some/pkg/inst/tinytest")
-  
-  expect_identical(res$include_dirs, character(0))
-  expect_type(res$teardown, "closure")
-  expect_null(res$teardown())
-})
-
-
-test_that("prepare_tinytest_dev_includes adds inst/include and sets flags when env was unset", {
-  
-  prep <- prepare_tinytest_dev_includes
-  
-  pkg_source_path <- file.path(tempdir(), "devinc_unset")
-  tiny_dir        <- file.path(pkg_source_path, "inst", "tinytest")
-  inst_include    <- file.path(pkg_source_path, "inst", "include")
-  cpp_dir         <- file.path(tiny_dir, "cpp")
-  
-  # Local in-memory environment store (no real env touched)
-  fake_env <- new.env(parent = emptyenv())
-  
-  # inst/include exists, but the tinytest cpp/ dir does not
-  mockery::stub(prep, "dir.exists",
-                function(path) path %in% inst_include)
-  mockery::stub(prep, "normalizePath", function(path, ...) path)
-  mockery::stub(prep, "Sys.getenv",
-                function(x, unset = NA_character_, names = TRUE) {
-                  stats::setNames(c(NA_character_, NA_character_),
-                                  c("PKG_CPPFLAGS", "CLINK_CPPFLAGS"))
-                })
-  mockery::stub(prep, "Sys.setenv", function(...) {
-    a <- list(...)
-    for (nm in names(a)) assign(nm, a[[nm]], envir = fake_env)
-    TRUE
-  })
-  mockery::stub(prep, "Sys.unsetenv", function(x) {
-    for (nm in x) if (exists(nm, envir = fake_env, inherits = FALSE)) {
-      rm(list = nm, envir = fake_env)
-    }
-    TRUE
-  })
-  
-  res <- prep(pkg_source_path, tiny_dir = tiny_dir)
-  
-  expect_identical(res$include_dirs, inst_include)
-  expect_false(cpp_dir %in% res$include_dirs)
-  
-  expected_i <- paste(sprintf("-I\"%s\"", inst_include), collapse = " ")
-  expect_identical(get("PKG_CPPFLAGS", envir = fake_env), expected_i)
-  expect_identical(get("CLINK_CPPFLAGS", envir = fake_env), expected_i)
-  
-  # teardown unsets both (they were previously unset / NA)
-  res$teardown()
-  expect_false(exists("PKG_CPPFLAGS", envir = fake_env, inherits = FALSE))
-  expect_false(exists("CLINK_CPPFLAGS", envir = fake_env, inherits = FALSE))
-})
-
-
-test_that("prepare_tinytest_dev_includes appends cpp/ dir and prepends to pre-set flags", {
-  
-  prep <- prepare_tinytest_dev_includes
-  
-  pkg_source_path <- file.path(tempdir(), "devinc_preset")
-  tiny_dir        <- file.path(pkg_source_path, "inst", "tinytest")
-  inst_include    <- file.path(pkg_source_path, "inst", "include")
-  cpp_dir         <- file.path(tiny_dir, "cpp")
-  
-  fake_env <- new.env(parent = emptyenv())
-  
-  # both inst/include and tinytest cpp/ exist
-  mockery::stub(prep, "dir.exists",
-                function(path) path %in% c(inst_include, cpp_dir))
-  mockery::stub(prep, "normalizePath", function(path, ...) path)
-  # PKG_CPPFLAGS already set; CLINK_CPPFLAGS unset
-  mockery::stub(prep, "Sys.getenv",
-                function(x, unset = NA_character_, names = TRUE) {
-                  stats::setNames(c("-DEXISTING", NA_character_),
-                                  c("PKG_CPPFLAGS", "CLINK_CPPFLAGS"))
-                })
-  mockery::stub(prep, "Sys.setenv", function(...) {
-    a <- list(...)
-    for (nm in names(a)) assign(nm, a[[nm]], envir = fake_env)
-    TRUE
-  })
-  mockery::stub(prep, "Sys.unsetenv", function(x) {
-    for (nm in x) if (exists(nm, envir = fake_env, inherits = FALSE)) {
-      rm(list = nm, envir = fake_env)
-    }
-    TRUE
-  })
-  
-  res <- prep(pkg_source_path, tiny_dir = tiny_dir)
-  
-  expect_identical(res$include_dirs, c(inst_include, cpp_dir))
-  
-  expected_i <- paste(sprintf("-I\"%s\"", c(inst_include, cpp_dir)), collapse = " ")
-  # pre-set var is prepended (i_flags first, old value second)
-  expect_identical(get("PKG_CPPFLAGS", envir = fake_env),
-                   paste(expected_i, "-DEXISTING"))
-  # previously-unset var becomes just the flags
-  expect_identical(get("CLINK_CPPFLAGS", envir = fake_env), expected_i)
-  
-  # teardown restores the prior value and unsets the previously-NA var
-  res$teardown()
-  expect_identical(get("PKG_CPPFLAGS", envir = fake_env), "-DEXISTING")
-  expect_false(exists("CLINK_CPPFLAGS", envir = fake_env, inherits = FALSE))
-})
-
-
-test_that("prepare_tinytest_dev_includes ignores cpp/ when tiny_dir is invalid", {
-  
-  prep <- prepare_tinytest_dev_includes
-  
-  pkg_source_path <- file.path(tempdir(), "devinc_badtiny")
-  inst_include    <- file.path(pkg_source_path, "inst", "include")
-  
-  fake_env <- new.env(parent = emptyenv())
-  
-  # dir.exists must only ever be consulted for inst/include here; if the code
-  # tried to probe a cpp dir built from an invalid tiny_dir, this would flag it.
-  mockery::stub(prep, "dir.exists", function(path) {
-    expect_identical(path, inst_include)
-    TRUE
-  })
-  mockery::stub(prep, "normalizePath", function(path, ...) path)
-  mockery::stub(prep, "Sys.getenv",
-                function(x, unset = NA_character_, names = TRUE) {
-                  stats::setNames(c(NA_character_, NA_character_),
-                                  c("PKG_CPPFLAGS", "CLINK_CPPFLAGS"))
-                })
-  mockery::stub(prep, "Sys.setenv", function(...) {
-    a <- list(...)
-    for (nm in names(a)) assign(nm, a[[nm]], envir = fake_env)
-    TRUE
-  })
-  mockery::stub(prep, "Sys.unsetenv", function(x) TRUE)
-  
-  res <- prep(pkg_source_path, tiny_dir = NA_character_)
-  
-  expect_identical(res$include_dirs, inst_include)
-})
-
-
-test_that("prepare_tinytest_dev_includes returns a no-op and warns on internal error", {
-  
-  prep <- prepare_tinytest_dev_includes
-  
-  # Force the tryCatch error branch from inside the protected block
-  mockery::stub(prep, "dir.exists", function(path) stop("boom"))
-  
-  expect_message(
-    res <- prep("/some/pkg", tiny_dir = "/some/pkg/inst/tinytest"),
-    "skipping dev include setup"
-  )
-  
-  expect_identical(res$include_dirs, character(0))
-  expect_type(res$teardown, "closure")
-  expect_null(res$teardown())
-})
-
-
-# ---------------------------------------------------------------------------
-# prepare_tinytest_run_env(): full-coverage suite
-#
-# Covers every branch without touching the real process environment or
-# filesystem. dir.exists()/list.files()/readLines() and the Sys.* env
-# accessors are stubbed (mockery::stub) against a local in-memory store, so
-# nothing leaks into .GlobalEnv or the user's environment and there is nothing
-# to clean up on disk.
-# ---------------------------------------------------------------------------
-
-test_that("prepare_tinytest_run_env returns a no-op for invalid tiny_dir", {
-  
-  prep <- prepare_tinytest_run_env
-  
-  invalids <- list(
-    non_character = 123,
-    multi_length  = c("a", "b"),
-    na_value      = NA_character_,
-    empty_string  = ""
-  )
-  
-  for (val in invalids) {
-    res <- prep(val)
-    expect_type(res, "list")
-    expect_identical(res$set_vars, character(0))
-    expect_type(res$teardown, "closure")
-    expect_null(res$teardown())
-  }
-})
-
-
-test_that("prepare_tinytest_run_env returns a no-op when the directory does not exist", {
-  
-  prep <- prepare_tinytest_run_env
-  
-  mockery::stub(prep, "dir.exists", function(path) FALSE)
-  
-  res <- prep("/no/such/tinytest")
-  
-  expect_identical(res$set_vars, character(0))
-  expect_null(res$teardown())
-})
-
-
-test_that("prepare_tinytest_run_env returns a no-op when only runner files are present", {
-  
-  prep <- prepare_tinytest_run_env
-  
-  tiny_dir <- file.path(tempdir(), "tte_runners", "inst", "tinytest")
-  
-  mockery::stub(prep, "dir.exists", function(path) TRUE)
-  # Only runner scripts -> all filtered out -> no scannable files
-  mockery::stub(prep, "list.files", function(path, ...) {
-    file.path(tiny_dir, c("tinytest.R", "runTinyTests.R", "run_tinytest.R"))
-  })
-  
-  res <- prep(tiny_dir)
-  
-  expect_identical(res$set_vars, character(0))
-  expect_null(res$teardown())
-})
-
-
-test_that("prepare_tinytest_run_env returns a no-op when no gates are found", {
-  
-  prep <- prepare_tinytest_run_env
-  
-  tiny_dir <- file.path(tempdir(), "tte_nogate", "inst", "tinytest")
-  f_a <- file.path(tiny_dir, "test-a.R")
-  
-  mockery::stub(prep, "dir.exists", function(path) TRUE)
-  mockery::stub(prep, "list.files", function(path, ...) f_a)
-  mockery::stub(prep, "readLines",
-                function(con, n, warn = FALSE, ...) c("x <- 1", "y <- 2"))
-  
-  res <- prep(tiny_dir)
-  
-  expect_identical(res$set_vars, character(0))
-  expect_null(res$teardown())
-})
-
-
-test_that("prepare_tinytest_run_env detects != and == gates, sets vars, and teardown restores", {
-  
-  prep <- prepare_tinytest_run_env
-  
-  tiny_dir <- file.path(tempdir(), "tte_gates", "inst", "tinytest")
-  f_err   <- file.path(tiny_dir, "test-err.R")    # readLines throws
-  f_empty <- file.path(tiny_dir, "test-empty.R")  # readLines -> character(0)
-  f_ne    <- file.path(tiny_dir, "test-ne.R")     # != gate
-  f_eq    <- file.path(tiny_dir, "test-eq.R")     # == gate + two gates on one line
-  
-  fake_env <- new.env(parent = emptyenv())
-  
-  mockery::stub(prep, "dir.exists", function(path) TRUE)
-  mockery::stub(prep, "list.files",
-                function(path, ...) c(f_err, f_empty, f_ne, f_eq))
-  
-  mockery::stub(prep, "readLines", function(con, n, warn = FALSE, ...) {
-    if (identical(con, f_err))   stop("io failure")
-    if (identical(con, f_empty)) return(character(0))
-    if (identical(con, f_ne)) {
-      return('if (Sys.getenv("RunAllRcppTests") != "yes") exit_file("skip")')
-    }
-    if (identical(con, f_eq)) {
-      return(c(
-        'ok <- Sys.getenv("RunVerboseRcppTests") == "yes"',
-        'Sys.getenv("A") == "1" && Sys.getenv("B") != "2"'
-      ))
-    }
-    character(0)
-  })
-  
-  # A was previously set; the rest were unset (NA) -> exercises both teardown paths
-  mockery::stub(prep, "Sys.getenv",
-                function(x, unset = NA_character_, names = TRUE) {
-                  stats::setNames(
-                    vapply(x, function(v) if (identical(v, "A")) "OLD" else NA_character_,
-                           character(1)),
-                    x
-                  )
-                })
-  mockery::stub(prep, "Sys.setenv", function(...) {
-    a <- list(...)
-    for (nm in names(a)) assign(nm, a[[nm]], envir = fake_env)
-    TRUE
-  })
-  mockery::stub(prep, "Sys.unsetenv", function(x) {
-    for (nm in x) if (exists(nm, envir = fake_env, inherits = FALSE)) {
-      rm(list = nm, envir = fake_env)
-    }
-    TRUE
-  })
-  
-  res <- prep(tiny_dir)
-  
-  # all four gates discovered (across != and == idioms, incl. two on one line)
-  expect_setequal(names(res$set_vars),
-                  c("RunAllRcppTests", "RunVerboseRcppTests", "A", "B"))
-  expect_identical(
-    unname(res$set_vars[c("RunAllRcppTests", "RunVerboseRcppTests", "A", "B")]),
-    c("yes", "yes", "1", "2")
-  )
-  
-  # vars were set to required values in the (fake) environment
-  expect_identical(get("RunAllRcppTests", envir = fake_env), "yes")
-  expect_identical(get("RunVerboseRcppTests", envir = fake_env), "yes")
-  expect_identical(get("A", envir = fake_env), "1")
-  expect_identical(get("B", envir = fake_env), "2")
-  
-  # teardown: A restored to its prior value; the previously-unset vars removed
-  res$teardown()
-  expect_identical(get("A", envir = fake_env), "OLD")
-  expect_false(exists("RunAllRcppTests", envir = fake_env, inherits = FALSE))
-  expect_false(exists("RunVerboseRcppTests", envir = fake_env, inherits = FALSE))
-  expect_false(exists("B", envir = fake_env, inherits = FALSE))
-})
-
-
-test_that("prepare_tinytest_run_env returns a no-op and warns on internal error", {
-  
-  prep <- prepare_tinytest_run_env
-  
-  mockery::stub(prep, "dir.exists", function(path) TRUE)
-  mockery::stub(prep, "list.files", function(path, ...) stop("boom"))
-  
-  expect_message(
-    res <- prep(file.path(tempdir(), "tte_error")),
-    "skipping env gate setup"
-  )
-  
-  expect_identical(res$set_vars, character(0))
-  expect_null(res$teardown())
-})
-
-
-# ---------------------------------------------------------------------------
-# run_covr_skip_nstf(): tinytest_runner_paths filtering (tinytest branch)
-#
-# Covers the block that drops explicitly-declared tinytest runner paths from
-# test_files_clean. The runner here uses a basename that is NOT in the default
-# runner list, so its removal is attributable solely to the
-# tinytest_runner_paths block. All inputs are mocked, no global env is used,
-# and the temp dir is removed on exit.
-# ---------------------------------------------------------------------------
-
-test_that("tinytest branch removes declared tinytest_runner_paths from test_files_clean", {
-  
-  run_fn <- run_covr_skip_nstf
-  
-  pkg_source_path <- file.path(tempdir(), "mockpkg_runner_paths")
-  dir.create(file.path(pkg_source_path, "tests"), recursive = TRUE, showWarnings = FALSE)
-  withr::defer(unlink(pkg_source_path, recursive = TRUE, force = TRUE))
-  
-  pkg_name <- "mockpkg"
-  tt_dir        <- file.path(pkg_source_path, "inst", "tinytest")
-  test_a_path   <- file.path(tt_dir, "test-a.R")
-  test_b_path   <- file.path(tt_dir, "test-b.R")
-  # custom runner: basename not in c("tinytest.R","runTinyTests.R","run_tinytest.R")
-  runner_path   <- file.path(tt_dir, "custom_runner.R")
-  
-  mapping <- data.frame(
-    source_file = c("x.R", "y.R", "z.R"),
-    test_file   = c("test-a.R", "test-b.R", "custom_runner.R"),
-    stringsAsFactors = FALSE
-  )
-  
-  # No skips, so the skip_tests setdiff cannot account for the removal
-  problems_in <- data.frame(
-    test_file  = NA_character_,
-    issue_type = "No tests skipped",
-    stringsAsFactors = FALSE
-  )
-  
-  mockery::stub(run_fn, "get_pkg_name", function(...) pkg_name)
-  mockery::stub(run_fn, "get_nstf_test_path",
-                function(...) list(tinytest = file.path(pkg_source_path, "tests")))
-  mockery::stub(run_fn, "normalizePath", function(path, ...) path)
-  # the surviving (non-runner) files exist; runner is removed before this filter
-  mockery::stub(run_fn, "file.exists",
-                function(paths) paths %in% c(test_a_path, test_b_path))
-  mockery::stub(run_fn, "get_source_test_mapping_nstf", function(...) mapping)
-  mockery::stub(run_fn, "check_covr_skip_nstf", function(...) problems_in)
-  mockery::stub(run_fn, "get_function_no_tests",
-                function(...) data.frame(source_file = character(0), stringsAsFactors = FALSE))
-  
-  fake_ns <- new.env(parent = emptyenv())
-  mockery::stub(run_fn, "pkgload::load_all", function(...) NULL)
-  mockery::stub(run_fn, "asNamespace", function(name) fake_ns)
-  mockery::stub(run_fn, "ls", function(...) character(0))
-  mockery::stub(run_fn, "get", function(obj, envir) obj)
-  mockery::stub(run_fn, "load_package_datasets", function(...) character(0))
-  mockery::stub(run_fn, "load_dependencies_into_env", function(...) TRUE)
-  mockery::stub(run_fn, "load_base_r_packages_into_env", function(...) TRUE)
-  
-  # No file_status -> the per-file refinement block is skipped, so the value
-  # built by the runner-path filtering flows straight to create_nstf_covr_list.
-  mockery::stub(
-    run_fn, "create_tinytest_coverage",
-    function(...) list(coverage = list(x = 1), tinytests = list())
-  )
-  
-  captured <- new.env(parent = emptyenv())
-  mockery::stub(
-    run_fn, "create_nstf_covr_list",
-    function(coverage, pkg_name, no_tests_df, test_files_clean, skip_tests, problems) {
-      captured$test_files_clean <- test_files_clean
-      list(
-        res_cov   = list(name = pkg_name,
-                         coverage = list(filecoverage = matrix(1), totalcoverage = 70)),
-        total_cov = 70
-      )
-    }
-  )
-  
-  mockery::stub(run_fn, "cleanup_and_return_null", function(...) invisible(NULL))
-  
-  cov_env <- new.env(parent = emptyenv())
-  test_pkg_data <- tpd(has_tinytest = TRUE, tinytest_runner_paths = runner_path)
-  
-  result <- suppressMessages(
-    run_fn(pkg_source_path, test_pkg_data, cov_env = cov_env)
-  )
-  
-  # the declared runner path is removed; the two real test files remain
-  expect_setequal(captured$test_files_clean, c(test_a_path, test_b_path))
-  expect_false(runner_path %in% captured$test_files_clean)
-  expect_equal(result$total_cov, 70)
-})
-
-
-# ---------------------------------------------------------------------------
-# run_covr_skip_nstf(): empty-coverage fallback when res_cov is NULL
-#
-# Covers the block that builds a placeholder covr_list when
-# create_nstf_covr_list() yields a NULL res_cov. All inputs are mocked, no
-# global env is used, and the temp dir is removed on exit.
-# ---------------------------------------------------------------------------
-
-test_that("run_covr_skip_nstf returns the empty-coverage fallback when res_cov is NULL", {
-  
-  run_fn <- run_covr_skip_nstf
-  
-  pkg_source_path <- file.path(tempdir(), "mockpkg_null_rescov")
-  dir.create(file.path(pkg_source_path, "tests"), recursive = TRUE, showWarnings = FALSE)
-  withr::defer(unlink(pkg_source_path, recursive = TRUE, force = TRUE))
-  
-  pkg_name <- "mockpkg"
-  tt_dir      <- file.path(pkg_source_path, "inst", "tinytest")
-  test_a_path <- file.path(tt_dir, "test-a.R")
-  
-  mapping <- data.frame(
-    source_file = "x.R",
-    test_file   = "test-a.R",
-    stringsAsFactors = FALSE
-  )
-  
-  problems_in <- data.frame(
-    test_file  = NA_character_,
-    issue_type = "No tests skipped",
-    stringsAsFactors = FALSE
-  )
-  
-  mockery::stub(run_fn, "get_pkg_name", function(...) pkg_name)
-  mockery::stub(run_fn, "get_nstf_test_path",
-                function(...) list(tinytest = file.path(pkg_source_path, "tests")))
-  mockery::stub(run_fn, "normalizePath", function(path, ...) path)
-  mockery::stub(run_fn, "file.exists", function(paths) paths %in% test_a_path)
-  mockery::stub(run_fn, "get_source_test_mapping_nstf", function(...) mapping)
-  mockery::stub(run_fn, "check_covr_skip_nstf", function(...) problems_in)
-  mockery::stub(run_fn, "get_function_no_tests",
-                function(...) data.frame(source_file = character(0), stringsAsFactors = FALSE))
-  
-  fake_ns <- new.env(parent = emptyenv())
-  mockery::stub(run_fn, "pkgload::load_all", function(...) NULL)
-  mockery::stub(run_fn, "asNamespace", function(name) fake_ns)
-  mockery::stub(run_fn, "ls", function(...) character(0))
-  mockery::stub(run_fn, "get", function(obj, envir) obj)
-  mockery::stub(run_fn, "load_package_datasets", function(...) character(0))
-  mockery::stub(run_fn, "load_dependencies_into_env", function(...) TRUE)
-  mockery::stub(run_fn, "load_base_r_packages_into_env", function(...) TRUE)
-  
-  mockery::stub(
-    run_fn, "create_tinytest_coverage",
-    function(...) list(coverage = list(x = 1), tinytests = list())
-  )
-  
-  # Force the NULL-res_cov branch: a non-NULL total_cov shows the fallback
-  # fully replaces the returned list.
-  mockery::stub(
-    run_fn, "create_nstf_covr_list",
-    function(...) list(res_cov = NULL, total_cov = 999)
-  )
-  
-  mockery::stub(run_fn, "cleanup_and_return_null", function(...) invisible(NULL))
-  
-  cov_env <- new.env(parent = emptyenv())
-  test_pkg_data <- tpd(has_tinytest = TRUE)
-  
-  result <- suppressMessages(
-    run_fn(pkg_source_path, test_pkg_data, cov_env = cov_env)
-  )
-  
-  # Placeholder coverage object fully replaces the NULL-res_cov result
-  expect_equal(result$total_cov, 0)
-  expect_identical(result$res_cov$name, pkg_name)
-  expect_equal(result$res_cov$coverage$totalcoverage, 0)
-  expect_identical(result$res_cov$errors, "No testthat or testit configuration")
-  expect_true(is.na(result$res_cov$notes))
-  
-  fc <- result$res_cov$coverage$filecoverage
-  expect_true(is.matrix(fc))
-  expect_equal(dim(fc), c(1L, 1L))
-  expect_equal(unname(fc[1, 1]), 0)
-  expect_identical(rownames(fc), "No functions tested")
-})
-
-
-# ---------------------------------------------------------------------------
-# check_covr_skip_nstf(): tinytest probe branch (is_tinytest)
-#
-# Covers the per-file probe that runs tinytest::run_test_file() and flags files
-# whose expectations fail. base_dir ends in inst/tinytest so is_tinytest is
-# TRUE; tinytest::run_test_file / any_fail and the path helpers are mocked, so
-# no real tests run, no global env is used, and nothing is written to disk.
-# ---------------------------------------------------------------------------
-
-test_that("check_covr_skip_nstf flags tinytest files with failed expectations", {
-  
-  fn <- check_covr_skip_nstf
-  
-  pkg_source_path <- file.path(tempdir(), "ccsn_tt_fail")
-  base_dir        <- file.path(pkg_source_path, "inst", "tinytest")
-  
-  mapping <- data.frame(
-    source_file = "x.R",
-    test_file   = "test-a.R",
-    stringsAsFactors = FALSE
-  )
-  
-  mockery::stub(fn, "get_pkg_name", function(...) "mockpkg")
-  mockery::stub(fn, "normalizePath", function(path, ...) path)
-  mockery::stub(fn, "file.exists", function(...) TRUE)
-  mockery::stub(fn, "tinytest::run_test_file", function(...) list(fake = TRUE))
-  mockery::stub(fn, "tinytest::any_fail", function(tt) TRUE)
-  
-  result <- fn(pkg_source_path, mapping, base_dir = base_dir)
-  
-  expect_s3_class(result, "data.frame")
-  expect_equal(nrow(result), 1L)
-  expect_identical(result$test_file, "test-a.R")
-  expect_identical(result$issue_type, "failed expectation")
-})
-
-
-test_that("check_covr_skip_nstf reports no skips when tinytest expectations pass", {
-  
-  fn <- check_covr_skip_nstf
-  
-  pkg_source_path <- file.path(tempdir(), "ccsn_tt_pass")
-  base_dir        <- file.path(pkg_source_path, "inst", "tinytest")
-  
-  mapping <- data.frame(
-    source_file = "x.R",
-    test_file   = "test-a.R",
-    stringsAsFactors = FALSE
-  )
-  
-  mockery::stub(fn, "get_pkg_name", function(...) "mockpkg")
-  mockery::stub(fn, "normalizePath", function(path, ...) path)
-  mockery::stub(fn, "file.exists", function(...) TRUE)
-  mockery::stub(fn, "tinytest::run_test_file", function(...) list(fake = TRUE))
-  mockery::stub(fn, "tinytest::any_fail", function(tt) FALSE)
-  
-  result <- fn(pkg_source_path, mapping, base_dir = base_dir)
-  
-  # no problems -> placeholder "No tests skipped" row
-  expect_s3_class(result, "data.frame")
-  expect_equal(nrow(result), 1L)
-  expect_true(is.na(result$test_file))
-  expect_identical(result$issue_type, "No tests skipped")
-})
-
-
-# ---------------------------------------------------------------------------
-# create_tinytest_coverage(): informational messages
-#
-# Covers the three message blocks that fire when (a) gated env vars are set,
-# (b) dev-tree include paths are added, and (c) objects created in .GlobalEnv
-# are cleaned up. globalenv() is stubbed to a *fake* environment that the
-# mocked run_test_file pollutes, so the real global environment is never
-# touched. NOT_CRAN is snapshotted and restored on exit.
-# ---------------------------------------------------------------------------
-
-test_that("create_tinytest_coverage emits gate/include/global-cleanup messages", {
-  
-  pkg_source_path <- "/pkg"
-  tiny_dir        <- "/pkg/inst/tinytest"
-  pkg_name        <- "mypkg"
-  
-  # covr internals
-  flags <- new.env(parent = emptyenv())
-  flags$trace <- FALSE; flags$reset <- FALSE; flags$clear <- FALSE
-  fake_counters <- list(counter_data = 1)
-  fake_coverage <- structure(list(kind = "coverage"), class = "coverage")
-  fake_covr_ns  <- make_fake_covr_ns(flags,
-                                     counters_value = fake_counters,
-                                     coverage_value = fake_coverage)
-  fake_pkg_ns <- new.env(parent = emptyenv())
-  
-  # Fake "global" environment so the cleanup branch can run without touching
-  # the real .GlobalEnv.
-  fake_global <- new.env(parent = emptyenv())
-  
-  mockery::stub(create_tinytest_coverage, "asNamespace", function(name) {
-    if (identical(name, "covr"))   return(fake_covr_ns)
-    if (identical(name, pkg_name)) return(fake_pkg_ns)
-    stop("unexpected asNamespace(", name, ")")
-  })
-  mockery::stub(create_tinytest_coverage, "globalenv", function() fake_global)
-  
-  # Non-empty gate vars -> "Enabling gated tinytest variable(s)" message
-  mockery::stub(create_tinytest_coverage, "prepare_tinytest_run_env",
-                function(...) list(
-                  set_vars = c(RunAllRcppTests = "yes"),
-                  teardown = function() invisible(NULL)
-                ))
-  # Non-empty include dirs -> "Adding dev-tree include path(s)" message
-  mockery::stub(create_tinytest_coverage, "prepare_tinytest_dev_includes",
-                function(...) list(
-                  include_dirs = "/pkg/inst/include",
-                  teardown     = function() invisible(NULL)
-                ))
-  
-  test_a <- file.path(tiny_dir, "test_a.R")
-  mockery::stub(create_tinytest_coverage, "list.files",
-                function(path, pattern, full.names) test_a)
-  
-  # The run "pollutes" the fake global env, triggering the cleanup branch.
-  mockery::stub(create_tinytest_coverage, "tinytest::run_test_file",
-                function(file, at_home, color) {
-                  assign("polluted_fn", function() NULL, envir = fake_global)
-                  list(results = "ok")
-                })
-  
-  # Restore NOT_CRAN regardless of the function's own teardown
-  old_notcran <- Sys.getenv("NOT_CRAN", unset = NA)
-  withr::defer(
-    if (is.na(old_notcran)) Sys.unsetenv("NOT_CRAN") else Sys.setenv(NOT_CRAN = old_notcran)
-  )
-  
-  msgs <- testthat::capture_messages(
-    res <- create_tinytest_coverage(pkg_source_path, pkg_name, tiny_dir = tiny_dir)
-  )
-  
-  # all three informational messages were emitted
-  expect_match(msgs, "Enabling gated tinytest variable\\(s\\) for mypkg: RunAllRcppTests=yes",
-               all = FALSE)
-  expect_match(msgs, "Adding dev-tree include path\\(s\\) for mypkg: /pkg/inst/include",
-               all = FALSE)
-  expect_match(msgs, "Removed 1 object\\(s\\) created in \\.GlobalEnv during mypkg tinytest coverage",
-               all = FALSE)
-  
-  # the polluting object was removed from the (fake) global env
-  expect_false(exists("polluted_fn", envir = fake_global, inherits = FALSE))
-  
-  expect_identical(res$coverage, fake_coverage)
-})
-
