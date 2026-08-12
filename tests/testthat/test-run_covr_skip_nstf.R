@@ -2120,10 +2120,19 @@ test_that("returns testit path when tests/testit exists", {
 test_that("get_nstf_test_path resolves a relative tinytest_dir against pkg_root", {
   # Real, empty temp directory - no mocking needed: dir.exists()/list.files() on
   # a real (if mostly empty) directory tree behave exactly as production expects.
-  pkg_root <- file.path(tempdir(), "mockpkg_reltiny")
-  testdir  <- file.path(pkg_root, "tests")
+  pkg_root_raw <- file.path(tempdir(), "mockpkg_reltiny")
+  testdir <- file.path(pkg_root_raw, "tests")
   dir.create(testdir, recursive = TRUE, showWarnings = FALSE)
-  withr::defer(unlink(pkg_root, recursive = TRUE, force = TRUE))
+  withr::defer(unlink(pkg_root_raw, recursive = TRUE, force = TRUE))
+  
+  # get_nstf_test_path() normalizes testdir *first*, while it still exists on disk,
+  # then derives pkg_root from that already-normalized path - on macOS this resolves
+  # tempdir()'s /var -> /private/var symlink, and on Windows it can expand 8.3 short
+  # names (e.g. RUNNER~1 -> runneradmin) in CI. Comparing against a pkg_root computed
+  # independently from the raw tempdir() value drifts from the real result on those
+  # platforms, so mirror the same two-step normalization order here.
+  testdir_norm  <- normalizePath(testdir, winslash = "/", mustWork = FALSE)
+  pkg_root_norm <- normalizePath(file.path(testdir_norm, ".."), winslash = "/", mustWork = FALSE)
   
   test_pkg_data <- tpd(has_tinytest = TRUE)
   test_pkg_data$tinytest_dir <- "custom/tinytest"
@@ -2132,7 +2141,7 @@ test_that("get_nstf_test_path resolves a relative tinytest_dir against pkg_root"
   
   expect_identical(
     res$tinytest,
-    normalizePath(file.path(pkg_root, "custom", "tinytest"), winslash = "/", mustWork = FALSE)
+    normalizePath(file.path(pkg_root_norm, "custom", "tinytest"), winslash = "/", mustWork = FALSE)
   )
 })
 
