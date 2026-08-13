@@ -224,6 +224,25 @@ run_covr_skip_nstf <- function(pkg_source_path,
       env = cov_env)
   })
   
+  # tests_base: refine functions_no_tests using the package's real exported functions,
+  # matched against real test-file content rather than filename similarity. Requires the
+  # package to already be loaded (pkgload::load_all() above), since getNamespaceExports()
+  # only reflects a real, loaded namespace. no_tests_df computed earlier from the fuzzy
+  # filename mapping is intentionally left as the fallback if this refinement errors -
+  # it should never make the diagnostic worse than what already runs today.
+  if (isTRUE(test_pkg_data$has_tests_base) && !is.null(base_test_files)) {
+    export_mapping <- tryCatch(
+        get_source_test_mapping_by_exports(pkg_source_path, pkg_name, base_test_files),
+            error = function(e) {
+              message("Export-based mapping failed for ", pkg_name, " : ", e$message)
+              NULL
+            }
+    )
+    if (!is.null(export_mapping)) {
+      no_tests_df <- get_function_no_tests(export_mapping)
+    }
+  }
+  
   # ---- compute coverage: tinytest vs. base/MASS vs. fallback ----
   if (isTRUE(test_pkg_data$has_tinytest)) {
     message(sprintf("running tinytest coverage for %s", pkg_name))
@@ -1040,4 +1059,69 @@ create_nstf_covr_list <- function(coverage, pkg_name,
   )
   
   return(covr_list)
+}
+
+#' Map exported functions to test files by content, not filename (internal)
+#'
+#' Alternative to \code{get_source_test_mapping_nstf()} for the \code{tests_base} framework:
+#' instead of matching source and test file *names*, this checks which of the package's real
+#' exported functions are actually called (by name) in each real test file's text. Requires the
+#' package to already be loaded, since the true export list comes from
+#' \code{getNamespaceExports()} - a filename-only, load-free variant would have to fall back to
+#' hand-parsing \code{NAMESPACE}, which does not reliably resolve \code{exportPattern()} the way
+#' a loaded namespace does.
+#'
+#' @param pkg_source_path Character. Path to the package source root.
+#' @param pkg_name Character. Package name; must already be a loaded namespace.
+#' @param test_files Character vector. Basenames of the real test files under \code{tests/}
+#'   (e.g. \code{base_test_files}).
+#'
+#' @return A data frame with the same shape as \code{get_source_test_mapping_nstf()}:
+#'   \code{source_file}, \code{test_file} (\code{NA} if no exported function defined in that
+#'   source file is called, by name, in any test file's text).
+#'
+#' @keywords internal
+#' @family nstf_utility
+get_source_test_mapping_by_exports <- function(pkg_source_path, pkg_name, test_files) {
+  source_dir <- file.path(pkg_source_path, "R")
+  src_files  <- list.files(source_dir, pattern = "\\.R$", full.names = FALSE)
+  exports    <- getNamespaceExports(pkg_name)
+  
+  # which source file defines each exported name (first top-level `<-`/`=` assignment wins)
+  export_to_file <- character(0)
+  for (f in src_files) {
+    exprs <- tryCatch(parse(file.path(source_dir, f)), error = function(e) NULL)
+    if (is.null(exprs)) next
+    for (e in exprs) {
+      if (is.call(e) && as.character(e[[1]]) %in% c("<-", "=") && length(e) >= 2 &&
+          is.symbol(e[[2]])) {
+        nm <- as.character(e[[2]])
+        if (nm %in% exports && !(nm %in% names(export_to_file))) export_to_file[nm] <- f
+      }
+    }
+  }
+  
+  test_dir  <- file.path(pkg_source_path, "tests")
+  test_text <- lapply(test_files, function(tf) {
+    paste(readLines(file.path(test_dir, tf), warn = FALSE), collapse = "\n")
+  })
+  names(test_text) <- test_files
+  
+  find_test <- function(export_name) {
+    pat <- paste0("(^|[^A-Za-z0-9_.])", gsub("([.\\\\])", "\\\\\\1", export_name), "\\s*\\(")
+    for (tf in test_files) {
+      if (grepl(pat, test_text[[tf]], perl = TRUE)) return(tf)
+    }
+    NA_character_
+  }
+  
+  do.call(rbind, lapply(src_files, function(f) {
+    exports_here <- names(export_to_file)[export_to_file == f]
+    matched <- NA_character_
+    for (nm in exports_here) {
+      hit <- find_test(nm)
+      if (!is.na(hit)) { matched <- hit; break }
+    }
+    data.frame(source_file = f, test_file = matched, stringsAsFactors = FALSE)
+  }))
 }

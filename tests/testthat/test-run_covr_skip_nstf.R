@@ -3361,3 +3361,146 @@ test_that("create_nstf_covr_list handles coverage_to_list() error branch", {
   # notes = NA (as in error branch)
   expect_true(is.na(result$res_cov$notes))
 })
+
+# ---- test fixture builder ----
+make_pkg <- function(r_files, test_files) {
+  pkg_source_path <- tempfile(pattern = "mockpkg_")
+  dir.create(file.path(pkg_source_path, "R"), recursive = TRUE, showWarnings = FALSE)
+  dir.create(file.path(pkg_source_path, "tests"), recursive = TRUE, showWarnings = FALSE)
+  for (nm in names(r_files)) {
+    writeLines(r_files[[nm]], file.path(pkg_source_path, "R", nm))
+  }
+  for (nm in names(test_files)) {
+    writeLines(test_files[[nm]], file.path(pkg_source_path, "tests", nm))
+  }
+  pkg_source_path
+}
+
+test_that("matches an exported function to the test file that calls it", {
+  pkg_source_path <- make_pkg(
+    r_files = list("foo.R" = "foo <- function(x) x + 1", "bar.R" = "bar <- function(x) x - 1"),
+    test_files = list("test-foo.R" = "foo(1)", "test-bar.R" = "cat('no calls here')")
+  )
+  withr::defer(unlink(pkg_source_path, recursive = TRUE, force = TRUE))
+  mockery::stub(get_source_test_mapping_by_exports, "getNamespaceExports", c("foo", "bar"))
+  
+  res <- get_source_test_mapping_by_exports(pkg_source_path, "fakepkg", c("test-foo.R", "test-bar.R"))
+  
+  expect_equal(nrow(res), 2)
+  expect_equal(res$test_file[res$source_file == "foo.R"], "test-foo.R")
+  expect_true(is.na(res$test_file[res$source_file == "bar.R"]))
+})
+
+test_that("excludes internal (non-exported) functions even if a test file calls them", {
+  pkg_source_path <- make_pkg(
+    r_files = list("internal.R" = "hidden_helper <- function() 1"),
+    test_files = list("test-internal.R" = "hidden_helper()")
+  )
+  withr::defer(unlink(pkg_source_path, recursive = TRUE, force = TRUE))
+  # "hidden_helper" is deliberately left out of the stubbed export list
+  mockery::stub(get_source_test_mapping_by_exports, "getNamespaceExports", character(0))
+  
+  res <- get_source_test_mapping_by_exports(pkg_source_path, "fakepkg", c("test-internal.R"))
+  
+  expect_equal(nrow(res), 1)
+  expect_true(is.na(res$test_file[res$source_file == "internal.R"]))
+})
+
+test_that("word-boundary regex avoids partial-name false positives", {
+  pkg_source_path <- make_pkg(
+    r_files = list("select.R" = "select <- function(x) x"),
+    # calls selectMethod(), never the standalone select() the export needs
+    test_files = list("test-select.R" = "selectMethod(x, 'y')")
+  )
+  withr::defer(unlink(pkg_source_path, recursive = TRUE, force = TRUE))
+  mockery::stub(get_source_test_mapping_by_exports, "getNamespaceExports", "select")
+  
+  res <- get_source_test_mapping_by_exports(pkg_source_path, "fakepkg", c("test-select.R"))
+  
+  expect_true(is.na(res$test_file[res$source_file == "select.R"]))
+})
+
+test_that("dotted export names are matched correctly (regex escaping)", {
+  pkg_source_path <- make_pkg(
+    r_files = list("isfrac.R" = "is.fractions <- function(x) TRUE"),
+    test_files = list("test-isfrac.R" = "is.fractions(5)")
+  )
+  withr::defer(unlink(pkg_source_path, recursive = TRUE, force = TRUE))
+  mockery::stub(get_source_test_mapping_by_exports, "getNamespaceExports", "is.fractions")
+  
+  res <- get_source_test_mapping_by_exports(pkg_source_path, "fakepkg", c("test-isfrac.R"))
+  
+  expect_equal(res$test_file[res$source_file == "isfrac.R"], "test-isfrac.R")
+})
+
+test_that("returns the first test file (in input order) that calls the export", {
+  pkg_source_path <- make_pkg(
+    r_files = list("multi.R" = "multi <- function() 1"),
+    test_files = list("test-a.R" = "multi()", "test-b.R" = "multi()")
+  )
+  withr::defer(unlink(pkg_source_path, recursive = TRUE, force = TRUE))
+  mockery::stub(get_source_test_mapping_by_exports, "getNamespaceExports", "multi")
+  
+  res <- get_source_test_mapping_by_exports(pkg_source_path, "fakepkg", c("test-a.R", "test-b.R"))
+  
+  expect_equal(res$test_file[res$source_file == "multi.R"], "test-a.R")
+})
+
+test_that("returns NA for every source file when test_files is empty", {
+  pkg_source_path <- make_pkg(
+    r_files = list("a.R" = "a_fun <- function() 1", "b.R" = "b_fun <- function() 2"),
+    test_files = list()
+  )
+  withr::defer(unlink(pkg_source_path, recursive = TRUE, force = TRUE))
+  mockery::stub(get_source_test_mapping_by_exports, "getNamespaceExports", c("a_fun", "b_fun"))
+  
+  res <- get_source_test_mapping_by_exports(pkg_source_path, "fakepkg", character(0))
+  
+  expect_equal(nrow(res), 2)
+  expect_true(all(is.na(res$test_file)))
+})
+
+test_that("a source file that fails to parse is skipped, not fatal to the whole call", {
+  pkg_source_path <- make_pkg(
+    r_files = list(
+      "broken.R" = "foo <- function( {",       # deliberately invalid syntax
+      "good.R"   = "good <- function() 1"
+    ),
+    test_files = list("test-good.R" = "good()")
+  )
+  withr::defer(unlink(pkg_source_path, recursive = TRUE, force = TRUE))
+  mockery::stub(get_source_test_mapping_by_exports, "getNamespaceExports", "good")
+  
+  res <- get_source_test_mapping_by_exports(pkg_source_path, "fakepkg", c("test-good.R"))
+  
+  expect_equal(nrow(res), 2)
+  expect_equal(res$test_file[res$source_file == "good.R"], "test-good.R")
+  expect_true(is.na(res$test_file[res$source_file == "broken.R"]))
+})
+
+test_that("functions defined with `=` are recognized, not just `<-`", {
+  pkg_source_path <- make_pkg(
+    r_files = list("eq.R" = "eq_fun = function() 1"),
+    test_files = list("test-eq.R" = "eq_fun()")
+  )
+  withr::defer(unlink(pkg_source_path, recursive = TRUE, force = TRUE))
+  mockery::stub(get_source_test_mapping_by_exports, "getNamespaceExports", "eq_fun")
+  
+  res <- get_source_test_mapping_by_exports(pkg_source_path, "fakepkg", c("test-eq.R"))
+  
+  expect_equal(res$test_file[res$source_file == "eq.R"], "test-eq.R")
+})
+
+test_that("the first source file (alphabetically) to define a duplicated export name wins", {
+  pkg_source_path <- make_pkg(
+    r_files = list("first.R" = "dup <- function() 1", "second.R" = "dup <- function() 2"),
+    test_files = list("test-dup.R" = "dup()")
+  )
+  withr::defer(unlink(pkg_source_path, recursive = TRUE, force = TRUE))
+  mockery::stub(get_source_test_mapping_by_exports, "getNamespaceExports", "dup")
+  
+  res <- get_source_test_mapping_by_exports(pkg_source_path, "fakepkg", c("test-dup.R"))
+  
+  expect_equal(res$test_file[res$source_file == "first.R"], "test-dup.R")
+  expect_true(is.na(res$test_file[res$source_file == "second.R"]))
+})
