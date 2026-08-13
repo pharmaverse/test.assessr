@@ -2,6 +2,8 @@
 
 ## test.assessr 2.1.3
 
+CRAN release: 2026-07-16
+
 ### New Features
 
 - fix CRAN issue with `test-run_covr_skip_stf`

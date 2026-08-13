@@ -56,6 +56,7 @@
 <url><loc>/reference/get_pkg_name.html</loc></url>
 <url><loc>/reference/get_runit_test_paths.html</loc></url>
 <url><loc>/reference/get_source_test_mapping_bioc_nstf.html</loc></url>
+<url><loc>/reference/get_source_test_mapping_by_exports.html</loc></url>
 <url><loc>/reference/get_source_test_mapping_nstf.html</loc></url>
 <url><loc>/reference/get_stf_test_path.html</loc></url>
 <url><loc>/reference/get_test_framework_type.html</loc></url>
@@ -81,8 +82,6 @@
 <url><loc>/reference/normalize_test_results.html</loc></url>
 <url><loc>/reference/prepare_for_bioc_runit.html</loc></url>
 <url><loc>/reference/prepare_tests_for_package_dt.html</loc></url>
-<url><loc>/reference/prepare_tinytest_dev_includes.html</loc></url>
-<url><loc>/reference/prepare_tinytest_run_env.html</loc></url>
 <url><loc>/reference/remove_new_globals.html</loc></url>
 <url><loc>/reference/remove_run_unitTests_mapping.html</loc></url>
 <url><loc>/reference/restrict_test_paths_to_framework.html</loc></url>
