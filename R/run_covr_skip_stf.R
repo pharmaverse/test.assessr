@@ -54,7 +54,7 @@
 run_covr_skip_stf <- function(pkg_source_path, 
                               test_pkg_data, 
                               cov_env
-                              ) {
+) {
   
   # Input checking
   checkmate::assert_string(pkg_source_path)
@@ -89,6 +89,15 @@ run_covr_skip_stf <- function(pkg_source_path,
                                test_path       = test_path,
                                cov_env         = cov_env)
   
+  # A failed setup wipes cov_env; stop here with the real error text
+  if (!is.null(covr_setup$setup_error)) {
+    message(paste0("Coverage setup failed for ", pkg))
+    return(create_empty_covr_list(
+      pkg,
+      paste0("Coverage setup failed: ", covr_setup$setup_error)
+    ))
+  }
+  
   # Optionally stash metadata onto env for downstream consumers (non-breaking)
   cov_env$datasets_loaded <- covr_setup$datasets_loaded
   cov_env$root_dir        <- covr_setup$root_dir
@@ -108,7 +117,13 @@ run_covr_skip_stf <- function(pkg_source_path,
   test_results <- create_test_reporter(test_path, pkg, cov_env)
   
   if (is.null(test_results)) {
-    return(create_empty_covr_list(pkg, "Default reporter execution failed"))
+    stf_error <- cov_env$stf_error
+    reporter_msg <- if (is.null(stf_error)) {
+      "Default reporter execution failed"
+    } else {
+      paste0("Default reporter execution failed: ", stf_error)
+    }
+    return(create_empty_covr_list(pkg, reporter_msg))
   } else {
     # update context column 
     test_results <- fix_test_context(test_results)
@@ -122,7 +137,7 @@ run_covr_skip_stf <- function(pkg_source_path,
     message(paste0("Error mapping tests for ", pkg, " : ", e$message))
     return(NULL)
   })
- 
+  
   if (is.null(test_map)) {
     message(paste0("Test map could not be created for ", pkg))
     return(create_empty_covr_list(pkg, "Test map creation failed"))
@@ -201,16 +216,74 @@ run_covr_skip_stf <- function(pkg_source_path,
     message(paste0("Creating test results for no skipped tests for ", pkg))
     
     # --- Pass cov_env down (create_covr_list_no_skip signature updated elsewhere) ---
-    covr_list <- create_covr_list_no_skip(test_map        = test_map,
+    covr_list <- create_covr_list_no_skip(test_map = test_map,
                                           test_results_long = test_results,
                                           pkg_source_path = pkg_source_path,
-                                          pkg             = pkg,
-                                          cov_env         = cov_env)
+                                          pkg = pkg,
+                                          cov_env = cov_env)
   }
   
   return(covr_list)
 }
 
+
+#' Run testthat tests and capture errors
+#'
+#' Runs `testthat::test_dir()` in testthat's own package environment and
+#' captures any error with its cause.
+#'
+#' @param test_path Path to the test directory.
+#' @param pkg Package name.
+#' @param reporter A testthat reporter object.
+#' @param label Short label used in messages.
+#' @param ignore Regular expression of error messages treated as test outcomes.
+#'
+#' @return List with `results`, `error` (character or NULL) and `aborted`.
+#' @noRd
+run_stf_tests <- function(test_path, pkg, reporter, label, ignore = NULL) {
+  # env = NULL lets testthat build its own throw-away environment from the
+  # package namespace and search path, as in devtools::test(). It never
+  # writes to .GlobalEnv or to the package-private cov_env.
+  captured <- NULL
+  results <- tryCatch(
+    testthat::test_dir(
+      path = test_path,
+      reporter = reporter,
+      env = NULL,
+      stop_on_failure = FALSE,
+      stop_on_warning = FALSE,
+      package = pkg,
+      load_package = "source"
+    ),
+    error = function(e) {
+      captured <<- e
+      NULL
+    }
+  )
+  
+  error_text <- NULL
+  aborted <- FALSE
+  if (!is.null(captured)) {
+    error_text <- conditionMessage(captured)
+    cause <- captured$parent
+    if (!is.null(cause)) {
+      cause_text <- conditionMessage(cause)
+      if (!grepl(cause_text, error_text, fixed = TRUE)) {
+        error_text <- paste0(error_text, " | cause: ", cause_text)
+      }
+    }
+    if (!is.null(ignore) && grepl(ignore, error_text)) {
+      aborted <- TRUE
+      error_text <- NULL
+    } else {
+      message(
+        "Error running tests for ", pkg, " (", label, ") : ", error_text
+      )
+    }
+  }
+  
+  return(list(results = results, error = error_text, aborted = aborted))
+}
 
 #' @title Create Test Reporter
 #' @description Executes all tests in a given directory using `testthat::test_dir()`
@@ -218,66 +291,68 @@ run_covr_skip_stf <- function(pkg_source_path,
 #'
 #' @param test_path Character string specifying the path to the test directory.
 #' @param pkg Character string specifying the package name.
-#' @param cov_env environment covr environment.
+#' @param cov_env Optional environment; receives `stf_error` on failure. Not the test environment.
 #'
 #' @return A list of test results with corrected contexts, or `NULL` if an error occurs.
 #' @keywords internal
-create_test_reporter <- function(test_path, pkg, cov_env) {
+create_test_reporter <- function(test_path, pkg, cov_env = NULL) {
   
   message(paste0("Creating test reporter for: ", pkg))
-  test_results <- tryCatch({
-    sink(tempfile())
-    res <- testthat::test_dir(
-      path = test_path,
-      reporter = testthat::default_reporter(),
-      env = cov_env,
-      stop_on_failure = FALSE,
-      stop_on_warning = FALSE,
-      package = pkg,
-      load_package = "source"
-    )
-    sink()
-    res
-  }, error = function(e) {
-    message(paste0("Error running tests for ", pkg, " : ", e$message))
-    return(NULL)
-  })
-  test_results
+  
+  # Close only the sink opened here, even if the test run errors
+  sink_depth <- sink.number()
+  sink_file <- tempfile()
+  sink(sink_file)
+  on.exit({
+    while (sink.number() > sink_depth) sink()
+    unlink(sink_file)
+  }, add = TRUE)
+  
+  run <- run_stf_tests(
+    test_path = test_path,
+    pkg = pkg,
+    reporter = testthat::default_reporter(),
+    label = "default reporter"
+  )
+  
+  if (!is.null(run$error) && is.environment(cov_env)) {
+    cov_env$stf_error <- run$error
+  }
+  
+  return(run$results)
 }
 
 #' @title Create Fail Reporter
-#' @description Executes all tests in a given directory using `testthat::test_dir()`
-#' and applies context fixes to ensure each test has a valid context.
+#' @description Runs all tests in a directory with `testthat::FailReporter`
+#' to detect failing tests and report setup or helper errors.
 #'
 #' @param test_path Character string specifying the path to the test directory.
 #' @param pkg Character string specifying the package name.
-#' @param cov_env environment convr environment.
+#' @param cov_env Optional environment; not used as the test environment.
 #'
-#' @return A list of test results with corrected contexts, or `NULL` if an error occurs.
+#' @return A list with `failed` (logical) and `error` (character or `NULL`).
 #' @keywords internal
-create_fail_reporter <- function(test_path, pkg, cov_env) {
+create_fail_reporter <- function(test_path, pkg, cov_env = NULL) {
   message("Creating failing tests reporter for: ", pkg)
   
   rep <- testthat::FailReporter$new()
   
-  test_results <- tryCatch({
-    testthat::test_dir(
-      path = test_path,
-      reporter = rep,
-      env = cov_env,
-      stop_on_failure = FALSE,
-      stop_on_warning  = FALSE,
-      package = pkg,
-      load_package = "source"
-    )
-    # rep$results contains every expectation recorded
-    rep$results
-  }, error = function(e) {
-    message("Error running tests for ", pkg, " : ", e$message)
-    NULL
-  })
+  # FailReporter aborts with "Failures detected." when any test fails.
+  # That is a test outcome, not a setup or helper error.
+  run <- run_stf_tests(
+    test_path = test_path,
+    pkg = pkg,
+    reporter = rep,
+    label = "fail reporter",
+    ignore = "Failures detected"
+  )
   
-  test_results
+  result <- list(
+    failed = isTRUE(run$aborted) || isTRUE(rep$failed),
+    error = run$error
+  )
+  
+  return(result)
 }
 
 
@@ -551,6 +626,8 @@ create_coverage_skip_stf <- function(
   message(paste0("Running environment coverage for ", pkg))
   cvr <- tryCatch({
     withr::with_dir(root_dir, {
+      # Same testthat context as the test run (see create_covr_list_no_skip)
+      withr::local_envvar(c(TESTTHAT = "true", TESTTHAT_PKG = pkg))
       cov <- covr::environment_coverage(env = cov_env, test_files = test_files)
       # clean problematic entries (avoid devtools vapply bug)
       cov <- Filter(function(x) length(c(x$srcref, x$value)) == 9, cov)
@@ -695,13 +772,13 @@ create_covr_list_no_skip <- function(test_map,
                                      pkg_source_path, 
                                      pkg,
                                      cov_env
-                                     ) {
+) {
   
   # --- Input checks ---
   checkmate::assert_string(pkg_source_path, .var.name = "pkg_source_path")
-  checkmate::assert_string(pkg,            .var.name = "pkg")
+  checkmate::assert_string(pkg, .var.name = "pkg")
   checkmate::assert_true(!missing(cov_env), .var.name = "cov_env")
-  checkmate::assert_environment(cov_env,     .var.name = "cov_env")
+  checkmate::assert_environment(cov_env, .var.name = "cov_env")
   
   # Attempt to unload package safely
   safe_unload_package(pkg)
@@ -747,7 +824,12 @@ create_covr_list_no_skip <- function(test_map,
     
     message(paste0("Running coverage manually for ", pkg))
     
+    coverage_error <- NULL
     coverage <- tryCatch({
+      # Match the testthat context of the test run: without these variables
+      # testthat::local_mocked_bindings() cannot find the package under test
+      # and fails when several packages are loaded with pkgload.
+      withr::local_envvar(c(TESTTHAT = "true", TESTTHAT_PKG = pkg))
       result <- covr::environment_coverage(
         env = cov_env,
         test_files = test_files
@@ -757,6 +839,7 @@ create_covr_list_no_skip <- function(test_map,
       result <- Filter(function(x) length(c(x$srcref, x$value)) == 9, result)
       result
     }, error = function(e) {
+      coverage_error <<- e$message
       cleanup_and_return_null(paste0("Error running coverage for ", pkg, " : ", e$message), env = cov_env)
     })
     
@@ -807,22 +890,26 @@ create_covr_list_no_skip <- function(test_map,
       res_cov = res_cov,
       tests_skipped = tests_skipped
     )
-   } else {
-      message("No test coverage for this configuration")
-      covr_list <- list(
-        total_cov = 0,
-        res_cov = list(
-          name = pkg,
-          coverage = list(
-            filecoverage = matrix(0, nrow = 1, dimnames = list("No functions tested")),
-            totalcoverage = 0
-          ),
-          errors = "No testthat or testit configuration",
-          notes = NA
-        )
+  } else {
+    message("No test coverage for this configuration")
+    covr_list <- list(
+      total_cov = 0,
+      res_cov = list(
+        name = pkg,
+        coverage = list(
+          filecoverage = matrix(0, nrow = 1, dimnames = list("No functions tested")),
+          totalcoverage = 0
+        ),
+        errors = if (is.null(coverage_error)) {
+          "No testthat or testit configuration"
+        } else {
+          paste0("Error running coverage: ", coverage_error)
+        },
+        notes = NA
       )
-    } 
-    
+    )
+  }
+  
   cleanup_and_return_null(env = cov_env)
   
   return(covr_list)
@@ -896,7 +983,7 @@ is_no_coverage_cov <- function(cov) {
     } else {
       names(fc)
     }
-  
+    
     # Check for the precise sentinel shape and label
     is_len1_na <- (length(fc) == 1L) && is.na(fc[[1L]])
     has_no_cov_name <- isTRUE(length(files) >= 1L) && any(files %in% "no_coverage.R")
