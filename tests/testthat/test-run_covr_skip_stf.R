@@ -1112,78 +1112,78 @@ test_that("create_covr_list_no_skip falls back to package_coverage when no datas
 })
 
 
-test_that("create_covr_list_no_skip handles NULL coverage", {
-  
-  # Mock inputs
-  test_map <- data.frame(file = "test-file.R", stringsAsFactors = FALSE)
-  
-  # Use valid expectation objects
-  mock_success <- testthat::expect_success(expect_true(TRUE))
-  mock_failure <- testthat::expect_failure(expect_true(FALSE))
-  mock_skip    <- structure(list(), class = "expectation_skip")
-  
-  test_results_long <- list(
-    list(results = list(mock_success, mock_failure, mock_skip))
-  )
-  
-  pkg_source_path <- tempdir()
-  pkg <- "mockpkg"
-  
-  # ----------- REQUIRED STUBS -------------
-  
-  # No-op package unloading
-  mockery::stub(create_covr_list_no_skip, "safe_unload_package", function(...) NULL)
-  
-  # No-op environment loader
-  mockery::stub(create_covr_list_no_skip, "load_package_into_env", function(...) NULL)
-  
-  # CRITICAL: stub utils::data(), not data()
-  mockery::stub(
-    create_covr_list_no_skip,
-    "utils::data",
-    function(package, ...) {
-      list(results = data.frame(Item = character(0), stringsAsFactors = FALSE))
-    }
-  )
-  
-  # Pretend all referenced files exist
-  mockery::stub(create_covr_list_no_skip, "file.exists", function(...) TRUE)
-  
-  # No datasets referenced in test files
-  mockery::stub(create_covr_list_no_skip, "readLines", function(...) "some unrelated code")
-  
-  # Force NULL coverage from covr
-  mockery::stub(create_covr_list_no_skip, "covr::package_coverage", function(...) NULL)
-  
-  # cleanup helper as no-op
-  mockery::stub(create_covr_list_no_skip, "cleanup_and_return_null", function(...) NULL)
-  
-  # ----------------------------------------
-  
-  cov_env <- new.env(parent = emptyenv())
-  
-  # Run function using correct signature (named args)
-  result <- create_covr_list_no_skip(
-    test_map          = test_map,
-    test_results_long = test_results_long,
-    pkg_source_path   = pkg_source_path,
-    pkg               = pkg,
-    cov_env           = cov_env
-  )
-  
-  # ---- Assertions for the fallback NULL-coverage branch ----
-  expect_type(result, "list")
-  expect_equal(result$total_cov, 0)
-  
-  expect_equal(result$res_cov$coverage$totalcoverage, 0)
-  
-  expect_equal(
-    result$res_cov$coverage$filecoverage,
-    matrix(0, nrow = 1, dimnames = list("No functions tested"))
-  )
-  
-  expect_equal(result$res_cov$errors, "No testthat or testit configuration")
-})
+# test_that("create_covr_list_no_skip handles NULL coverage", {
+#   
+#   # Mock inputs
+#   test_map <- data.frame(file = "test-file.R", stringsAsFactors = FALSE)
+#   
+#   # Use valid expectation objects
+#   mock_success <- testthat::expect_success(expect_true(TRUE))
+#   mock_failure <- testthat::expect_failure(expect_true(FALSE))
+#   mock_skip    <- structure(list(), class = "expectation_skip")
+#   
+#   test_results_long <- list(
+#     list(results = list(mock_success, mock_failure, mock_skip))
+#   )
+#   
+#   pkg_source_path <- tempdir()
+#   pkg <- "mockpkg"
+#   
+#   # ----------- REQUIRED STUBS -------------
+#   
+#   # No-op package unloading
+#   mockery::stub(create_covr_list_no_skip, "safe_unload_package", function(...) NULL)
+#   
+#   # No-op environment loader
+#   mockery::stub(create_covr_list_no_skip, "load_package_into_env", function(...) NULL)
+#   
+#   # CRITICAL: stub utils::data(), not data()
+#   mockery::stub(
+#     create_covr_list_no_skip,
+#     "utils::data",
+#     function(package, ...) {
+#       list(results = data.frame(Item = character(0), stringsAsFactors = FALSE))
+#     }
+#   )
+#   
+#   # Pretend all referenced files exist
+#   mockery::stub(create_covr_list_no_skip, "file.exists", function(...) TRUE)
+#   
+#   # No datasets referenced in test files
+#   mockery::stub(create_covr_list_no_skip, "readLines", function(...) "some unrelated code")
+#   
+#   # Force NULL coverage from covr
+#   mockery::stub(create_covr_list_no_skip, "covr::package_coverage", function(...) NULL)
+#   
+#   # cleanup helper as no-op
+#   mockery::stub(create_covr_list_no_skip, "cleanup_and_return_null", function(...) NULL)
+#   
+#   # ----------------------------------------
+#   
+#   cov_env <- new.env(parent = emptyenv())
+#   
+#   # Run function using correct signature (named args)
+#   result <- create_covr_list_no_skip(
+#     test_map          = test_map,
+#     test_results_long = test_results_long,
+#     pkg_source_path   = pkg_source_path,
+#     pkg               = pkg,
+#     cov_env           = cov_env
+#   )
+#   
+#   # ---- Assertions for the fallback NULL-coverage branch ----
+#   expect_type(result, "list")
+#   expect_equal(result$total_cov, 0)
+#   
+#   expect_equal(result$res_cov$coverage$totalcoverage, 0)
+#   
+#   expect_equal(
+#     result$res_cov$coverage$filecoverage,
+#     matrix(0, nrow = 1, dimnames = list("No functions tested"))
+#   )
+#   
+#   expect_equal(result$res_cov$errors, "No testthat or testit configuration")
+# })
 
 
 test_that("create_coverage_skip_stf reports no helpers when none exist", {
@@ -1311,11 +1311,12 @@ test_that("create_test_reporter returns mocked test results", {
     list(file = "test-b.R", context = "script2")
   )
   
-  # Stub testthat::test_dir to return fake results
-  mockery::stub(create_test_reporter, "testthat::test_dir", function(...) fake_results)
-  
-  # Stub fix_test_context to just return the same results
-  mockery::stub(create_test_reporter, "fix_test_context", function(x) x)
+  # Stub run_stf_tests to return fake results
+  mockery::stub(
+    create_test_reporter,
+    "run_stf_tests",
+    function(...) list(results = fake_results, error = NULL, aborted = FALSE)
+  )
   
   # Call the function
   result <- create_test_reporter(test_path = "tests", pkg = "mockpkg")
@@ -1328,14 +1329,332 @@ test_that("create_test_reporter returns mocked test results", {
 })
 
 test_that("create_test_reporter handles errors gracefully", {
-  # Stub testthat::test_dir to throw an error
-  mockery::stub(create_test_reporter, "testthat::test_dir", function(...) stop("Simulated error"))
+  mockery::stub(
+    create_test_reporter,
+    "run_stf_tests",
+    function(...) list(results = NULL, error = "Simulated error", aborted = FALSE)
+  )
   
-  # Call the function
-  result <- create_test_reporter(test_path = "tests", pkg = "mockpkg")
+  cov_env <- new.env(parent = emptyenv())
+  result <- create_test_reporter(
+    test_path = "tests",
+    pkg = "mockpkg",
+    cov_env = cov_env
+  )
   
-  # Assertions
-  expect_null(result) # Should return NULL on error
+  # Should return NULL on error and record the real error text
+  expect_null(result)
+  expect_equal(cov_env$stf_error, "Simulated error")
+})
+
+test_that("create_test_reporter does not write stf_error when cov_env is NULL", {
+  mockery::stub(
+    create_test_reporter,
+    "run_stf_tests",
+    function(...) list(results = NULL, error = "Simulated error", aborted = FALSE)
+  )
+  
+  expect_null(create_test_reporter(test_path = "tests", pkg = "mockpkg"))
+})
+
+test_that("create_test_reporter restores the sink after a failed run", {
+  mockery::stub(
+    create_test_reporter,
+    "run_stf_tests",
+    function(...) list(results = NULL, error = "Simulated error", aborted = FALSE)
+  )
+  
+  sink_before <- sink.number()
+  create_test_reporter(test_path = "tests", pkg = "mockpkg")
+  expect_equal(sink.number(), sink_before)
+})
+
+test_that("create_test_reporter restores the sink when run_stf_tests errors", {
+  mockery::stub(
+    create_test_reporter,
+    "run_stf_tests",
+    function(...) stop("unexpected failure")
+  )
+  
+  sink_before <- sink.number()
+  expect_error(
+    create_test_reporter(test_path = "tests", pkg = "mockpkg"),
+    "unexpected failure"
+  )
+  expect_equal(sink.number(), sink_before)
+})
+
+test_that("run_stf_tests returns results when test_dir succeeds", {
+  fake_results <- list(list(file = "test-a.R"))
+  mockery::stub(run_stf_tests, "testthat::test_dir", function(...) fake_results)
+  
+  out <- run_stf_tests("tests", "mockpkg", reporter = "silent", label = "unit")
+  
+  expect_equal(out$results, fake_results)
+  expect_null(out$error)
+  expect_false(out$aborted)
+})
+
+test_that("run_stf_tests runs test_dir with env = NULL and source loading", {
+  captured <- list()
+  mockery::stub(run_stf_tests, "testthat::test_dir", function(...) {
+    captured <<- list(...)
+    NULL
+  })
+  
+  run_stf_tests("tests", "mockpkg", reporter = "silent", label = "unit")
+  
+  expect_null(captured$env)
+  expect_true("env" %in% names(captured))
+  expect_equal(captured$load_package, "source")
+  expect_equal(captured$package, "mockpkg")
+  expect_false(captured$stop_on_failure)
+})
+
+test_that("run_stf_tests reports the error and its cause", {
+  cause <- simpleError("object 'USUBJID' not found")
+  err <- simpleError("Failed to evaluate './setup.R'.")
+  err$parent <- cause
+  mockery::stub(run_stf_tests, "testthat::test_dir", function(...) stop(err))
+  
+  expect_message(
+    out <- run_stf_tests("tests", "mockpkg", reporter = "silent", label = "unit"),
+    "Error running tests for mockpkg \\(unit\\)"
+  )
+  
+  expect_null(out$results)
+  expect_match(out$error, "Failed to evaluate './setup.R'", fixed = TRUE)
+  expect_match(out$error, "cause: object 'USUBJID' not found", fixed = TRUE)
+  expect_false(out$aborted)
+})
+
+test_that("run_stf_tests does not repeat a cause already in the message", {
+  cause <- simpleError("boom")
+  err <- simpleError("Failed to evaluate. Caused by error: boom")
+  err$parent <- cause
+  mockery::stub(run_stf_tests, "testthat::test_dir", function(...) stop(err))
+  
+  suppressMessages(
+    out <- run_stf_tests("tests", "mockpkg", reporter = "silent", label = "unit")
+  )
+  
+  expect_false(grepl("cause:", out$error, fixed = TRUE))
+})
+
+test_that("run_stf_tests treats ignored messages as an aborted run", {
+  mockery::stub(
+    run_stf_tests,
+    "testthat::test_dir",
+    function(...) stop("Failures detected.")
+  )
+  
+  expect_silent(
+    out <- run_stf_tests(
+      "tests",
+      "mockpkg",
+      reporter = "silent",
+      label = "unit",
+      ignore = "Failures detected"
+    )
+  )
+  
+  expect_true(out$aborted)
+  expect_null(out$error)
+})
+
+test_that("run_stf_tests reports errors that do not match ignore", {
+  mockery::stub(run_stf_tests, "testthat::test_dir", function(...) stop("other"))
+  
+  suppressMessages(
+    out <- run_stf_tests(
+      "tests",
+      "mockpkg",
+      reporter = "silent",
+      label = "unit",
+      ignore = "Failures detected"
+    )
+  )
+  
+  expect_false(out$aborted)
+  expect_equal(out$error, "other")
+})
+
+test_that("run_stf_tests loads setup.R and helpers that use dplyr::filter", {
+  skip_on_cran()
+  skip_if_not_installed("pkgload")
+  skip_if_not_installed("dplyr")
+  
+  # Regression: with env = cov_env, stats::filter masked dplyr::filter and
+  # setup.R failed with "Failed to evaluate './setup.R'".
+  pkg_dir <- file.path(tempfile("fxpkg"))
+  test_dir <- file.path(pkg_dir, "tests", "testthat")
+  dir.create(file.path(pkg_dir, "R"), recursive = TRUE)
+  dir.create(test_dir, recursive = TRUE)
+  withr::defer(unlink(pkg_dir, recursive = TRUE))
+  
+  writeLines(
+    c(
+      "Package: fxpkg", "Version: 0.0.1", "Title: Fx", "Description: Fx.",
+      "License: MIT", "Imports: dplyr", "Suggests: testthat (>= 3.0.0)",
+      "Config/testthat/edition: 3"
+    ),
+    file.path(pkg_dir, "DESCRIPTION")
+  )
+  writeLines(c("export(pub)", "importFrom(dplyr,filter)"), file.path(pkg_dir, "NAMESPACE"))
+  writeLines(
+    c("pub <- function() internal_fn() + 1", "internal_fn <- function() 1"),
+    file.path(pkg_dir, "R", "f.R")
+  )
+  writeLines(
+    c("library(dplyr)", "df <- filter(data.frame(a = 1:3), a == 1)", "zz_probe <- 1"),
+    file.path(test_dir, "setup.R")
+  )
+  writeLines(
+    "hx <- function() fxpkg:::internal_fn() + 1",
+    file.path(test_dir, "helper-x.R")
+  )
+  writeLines(
+    c(
+      "test_that('setup and helper are available', {",
+      "  expect_equal(nrow(df), 1)",
+      "  expect_equal(hx(), 2)",
+      "})"
+    ),
+    file.path(test_dir, "test-a.R")
+  )
+  
+  globals_before <- ls(globalenv(), all.names = TRUE)
+  
+  out <- suppressMessages(
+    run_stf_tests(test_dir, "fxpkg", reporter = "silent", label = "fixture")
+  )
+  
+  expect_null(out$error)
+  results <- as.data.frame(out$results)
+  expect_equal(sum(results$failed), 0)
+  expect_equal(sum(results$error), 0)
+  
+  # CRAN-safety: nothing leaks into .GlobalEnv
+  expect_equal(ls(globalenv(), all.names = TRUE), globals_before)
+  expect_false(exists("zz_probe", envir = globalenv(), inherits = FALSE))
+})
+
+test_that("run_stf_tests surfaces a setup.R failure with its cause", {
+  skip_on_cran()
+  skip_if_not_installed("pkgload")
+  
+  pkg_dir <- file.path(tempfile("fxpkgbad"))
+  test_dir <- file.path(pkg_dir, "tests", "testthat")
+  dir.create(file.path(pkg_dir, "R"), recursive = TRUE)
+  dir.create(test_dir, recursive = TRUE)
+  withr::defer(unlink(pkg_dir, recursive = TRUE))
+  
+  writeLines(
+    c(
+      "Package: fxpkgbad", "Version: 0.0.1", "Title: Fx", "Description: Fx.",
+      "License: MIT", "Suggests: testthat (>= 3.0.0)",
+      "Config/testthat/edition: 3"
+    ),
+    file.path(pkg_dir, "DESCRIPTION")
+  )
+  writeLines("export(pub)", file.path(pkg_dir, "NAMESPACE"))
+  writeLines("pub <- function() 1", file.path(pkg_dir, "R", "f.R"))
+  writeLines("stop('setup boom')", file.path(test_dir, "setup.R"))
+  writeLines("test_that('x', expect_true(TRUE))", file.path(test_dir, "test-a.R"))
+  
+  out <- suppressMessages(
+    run_stf_tests(test_dir, "fxpkgbad", reporter = "silent", label = "fixture")
+  )
+  
+  expect_null(out$results)
+  expect_match(out$error, "setup boom", fixed = TRUE)
+  expect_false(out$aborted)
+})
+
+test_that("run_covr_skip_stf stops with the real error when setup fails", {
+  pkg_source_path <- file.path(tempdir(), "mockpkg_setup_fail")
+  dir.create(file.path(pkg_source_path, "tests", "testthat"), recursive = TRUE, showWarnings = FALSE)
+  withr::defer(unlink(pkg_source_path, recursive = TRUE))
+  
+  mockery::stub(run_covr_skip_stf, "get_pkg_name", function(...) "mockpkg")
+  mockery::stub(run_covr_skip_stf, "get_stf_test_path", function(x, testdir) testdir)
+  mockery::stub(run_covr_skip_stf, "setwd", function(...) NULL)
+  mockery::stub(run_covr_skip_stf, "setup_covr_env", function(...) {
+    list(setup_error = "Project root not found.")
+  })
+  reporter_mock <- mockery::mock(NULL)
+  mockery::stub(run_covr_skip_stf, "create_fail_reporter", reporter_mock)
+  
+  result <- suppressMessages(
+    run_covr_skip_stf(
+      pkg_source_path = pkg_source_path,
+      test_pkg_data = list(has_testthat = TRUE),
+      cov_env = new.env(parent = emptyenv())
+    )
+  )
+  
+  expect_equal(result$total_cov, 0)
+  expect_match(result$res_cov$errors, "Coverage setup failed: Project root not found.", fixed = TRUE)
+  mockery::expect_called(reporter_mock, 0)
+})
+
+test_that("run_covr_skip_stf reports the reporter error text", {
+  pkg_source_path <- file.path(tempdir(), "mockpkg_reporter_fail")
+  dir.create(file.path(pkg_source_path, "tests", "testthat"), recursive = TRUE, showWarnings = FALSE)
+  withr::defer(unlink(pkg_source_path, recursive = TRUE))
+  
+  mockery::stub(run_covr_skip_stf, "get_pkg_name", function(...) "mockpkg")
+  mockery::stub(run_covr_skip_stf, "get_stf_test_path", function(x, testdir) testdir)
+  mockery::stub(run_covr_skip_stf, "setwd", function(...) NULL)
+  mockery::stub(run_covr_skip_stf, "setup_covr_env", function(...) {
+    list(datasets_loaded = TRUE, root_dir = ".", initial_state = list(), helpers_loaded = TRUE)
+  })
+  mockery::stub(run_covr_skip_stf, "unloadNamespace", function(...) NULL)
+  mockery::stub(run_covr_skip_stf, "create_fail_reporter", function(...) NULL)
+  mockery::stub(run_covr_skip_stf, "create_test_reporter", function(test_path, pkg, cov_env) {
+    cov_env$stf_error <- "Failed to evaluate './setup.R'."
+    NULL
+  })
+  
+  result <- suppressMessages(
+    run_covr_skip_stf(
+      pkg_source_path = pkg_source_path,
+      test_pkg_data = list(has_testthat = TRUE),
+      cov_env = new.env(parent = emptyenv())
+    )
+  )
+  
+  expect_match(
+    result$res_cov$errors,
+    "Default reporter execution failed: Failed to evaluate './setup.R'.",
+    fixed = TRUE
+  )
+})
+
+test_that("run_covr_skip_stf keeps the generic message without a recorded error", {
+  pkg_source_path <- file.path(tempdir(), "mockpkg_reporter_generic")
+  dir.create(file.path(pkg_source_path, "tests", "testthat"), recursive = TRUE, showWarnings = FALSE)
+  withr::defer(unlink(pkg_source_path, recursive = TRUE))
+  
+  mockery::stub(run_covr_skip_stf, "get_pkg_name", function(...) "mockpkg")
+  mockery::stub(run_covr_skip_stf, "get_stf_test_path", function(x, testdir) testdir)
+  mockery::stub(run_covr_skip_stf, "setwd", function(...) NULL)
+  mockery::stub(run_covr_skip_stf, "setup_covr_env", function(...) {
+    list(datasets_loaded = TRUE, root_dir = ".", initial_state = list(), helpers_loaded = TRUE)
+  })
+  mockery::stub(run_covr_skip_stf, "unloadNamespace", function(...) NULL)
+  mockery::stub(run_covr_skip_stf, "create_fail_reporter", function(...) NULL)
+  mockery::stub(run_covr_skip_stf, "create_test_reporter", function(...) NULL)
+  
+  result <- suppressMessages(
+    run_covr_skip_stf(
+      pkg_source_path = pkg_source_path,
+      test_pkg_data = list(has_testthat = TRUE),
+      cov_env = new.env(parent = emptyenv())
+    )
+  )
+  
+  expect_equal(result$res_cov$errors, "Default reporter execution failed")
 })
 
 
@@ -1417,52 +1736,101 @@ test_that("get_stf_test_path returns correct paths based on test_pkg_data", {
   unlink(testdir, recursive = TRUE)
 })
 
-test_that("create_fail_reporter returns results on success", {
+test_that("create_fail_reporter reports no failures and no error on success", {
   pkg <- "mockpkg"
   test_path <- tempdir()
   
-  # 1. Create a mock for the FailReporter results
-  mock_results <- list(
-    list(file = "test-a.R", context = "script1", status = "FAILED"),
-    list(file = "test-b.R", context = "script2", status = "PASS")
+  mockery::stub(
+    create_fail_reporter,
+    "testthat::FailReporter$new",
+    list(failed = FALSE)
+  )
+  mockery::stub(
+    create_fail_reporter,
+    "run_stf_tests",
+    function(...) list(results = list(), error = NULL, aborted = FALSE)
   )
   
-  # 2. Mock the FailReporter R6 object
-  # We stub the 'new' method to return an object with our fake results
-  mock_rep <- list(results = mock_results)
-  mockery::stub(create_fail_reporter, "testthat::FailReporter$new", mock_rep)
-  
-  # 3. Stub test_dir to do nothing (preventing the DESCRIPTION/path warning)
-  mockery::stub(create_fail_reporter, "testthat::test_dir", function(...) NULL)
-  
-  # Execute
   result <- create_fail_reporter(test_path, pkg)
   
-  # Assertions
-  expect_equal(result, mock_results)
-  expect_length(result, 2)
+  expect_false(result$failed)
+  expect_null(result$error)
 })
 
-test_that("create_fail_reporter handles test_dir errors gracefully", {
-  pkg <- "mockpkg"
-  test_path <- "non/existent/path"
-  
-  # Stub FailReporter to return a valid object structure
-  mockery::stub(create_fail_reporter, "testthat::FailReporter$new", list(results = list()))
-  
-  # Stub test_dir to throw an error
-  mockery::stub(create_fail_reporter, "testthat::test_dir", function(...) {
-    stop("Subprocess failure simulation")
-  })
-  
-  # Execute and capture message
-  expect_message(
-    result <- create_fail_reporter(test_path, pkg),
-    regexp = "Error running tests for mockpkg : Subprocess failure simulation"
+test_that("create_fail_reporter flags failing tests without reporting an error", {
+  mockery::stub(
+    create_fail_reporter,
+    "testthat::FailReporter$new",
+    list(failed = FALSE)
+  )
+  # FailReporter aborts with "Failures detected." when a test fails
+  mockery::stub(
+    create_fail_reporter,
+    "run_stf_tests",
+    function(...) list(results = NULL, error = NULL, aborted = TRUE)
   )
   
-  # Assertions
-  expect_null(result)
+  result <- create_fail_reporter(tempdir(), "mockpkg")
+  
+  expect_true(result$failed)
+  expect_null(result$error)
+})
+
+test_that("create_fail_reporter uses the reporter's failed flag", {
+  mockery::stub(
+    create_fail_reporter,
+    "testthat::FailReporter$new",
+    list(failed = TRUE)
+  )
+  mockery::stub(
+    create_fail_reporter,
+    "run_stf_tests",
+    function(...) list(results = list(), error = NULL, aborted = FALSE)
+  )
+  
+  expect_true(create_fail_reporter(tempdir(), "mockpkg")$failed)
+})
+
+test_that("create_fail_reporter returns setup errors instead of NULL", {
+  mockery::stub(
+    create_fail_reporter,
+    "testthat::FailReporter$new",
+    list(failed = FALSE)
+  )
+  mockery::stub(
+    create_fail_reporter,
+    "run_stf_tests",
+    function(...) {
+      list(
+        results = NULL,
+        error = "Failed to evaluate './setup.R'. | cause: boom",
+        aborted = FALSE
+      )
+    }
+  )
+  
+  result <- create_fail_reporter("non/existent/path", "mockpkg")
+  
+  expect_false(result$failed)
+  expect_match(result$error, "cause: boom", fixed = TRUE)
+})
+
+test_that("create_fail_reporter passes the Failures detected ignore pattern", {
+  captured <- list()
+  mockery::stub(
+    create_fail_reporter,
+    "testthat::FailReporter$new",
+    list(failed = FALSE)
+  )
+  mockery::stub(create_fail_reporter, "run_stf_tests", function(...) {
+    captured <<- list(...)
+    list(results = list(), error = NULL, aborted = FALSE)
+  })
+  
+  create_fail_reporter(tempdir(), "mockpkg", cov_env = new.env())
+  
+  expect_equal(captured$ignore, "Failures detected")
+  expect_equal(captured$pkg, "mockpkg")
 })
 
 

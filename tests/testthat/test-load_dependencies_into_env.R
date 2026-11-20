@@ -138,6 +138,71 @@ test_that("imports exports from Depends into env", {
   
 })
 
+test_that("base packages are imported first and never overwrite other packages", {
+  skip_on_cran()
+  env <- new.env(parent = baseenv())
+  
+  # stats is listed AFTER dplyr; it must still be imported first
+  desc <- matrix(
+    c(NA_character_,                   # Depends
+      "dplyr, stats, utils, withr",    # Imports
+      NA_character_),                  # Suggests
+    nrow = 1,
+    dimnames = list(NULL, c("Depends", "Imports", "Suggests"))
+  )
+  
+  mockery::stub(load_dependencies_into_env, "file.exists", TRUE)
+  mockery::stub(load_dependencies_into_env, "read.dcf", desc)
+  mockery::stub(load_dependencies_into_env, "requireNamespace", TRUE)
+  mockery::stub(load_dependencies_into_env, "install_if_needed", function(...) invisible(TRUE))
+  mockery::stub(load_dependencies_into_env, "loadNamespace", function(...) invisible(TRUE))
+  
+  calls <- list()
+  mockery::stub(
+    load_dependencies_into_env,
+    "import_namespace_exports",
+    function(pkg, env, overwrite = TRUE, ...) {
+      calls[[length(calls) + 1L]] <<- list(pkg = pkg, overwrite = overwrite)
+      invisible(TRUE)
+    }
+  )
+  
+  expect_invisible(load_dependencies_into_env("fakepkg", env))
+  
+  pkgs <- vapply(calls, function(x) x$pkg, character(1))
+  overwrite <- vapply(calls, function(x) x$overwrite, logical(1))
+  
+  expect_setequal(pkgs, c("dplyr", "stats", "utils", "withr"))
+  # Base packages first, then the rest
+  expect_equal(sort(pkgs[1:2]), c("stats", "utils"))
+  expect_false(any(overwrite[pkgs %in% c("stats", "utils")]))
+  expect_true(all(overwrite[pkgs %in% c("dplyr", "withr")]))
+  expect_true(
+    max(which(pkgs %in% c("stats", "utils"))) < min(which(pkgs %in% c("dplyr", "withr")))
+  )
+})
+
+test_that("dplyr::filter is not masked by stats::filter in the target env", {
+  skip_on_cran()
+  skip_if_not_installed("dplyr")
+  env <- new.env(parent = baseenv())
+  
+  desc <- matrix(
+    c(NA_character_, "dplyr, stats", NA_character_),
+    nrow = 1,
+    dimnames = list(NULL, c("Depends", "Imports", "Suggests"))
+  )
+  
+  mockery::stub(load_dependencies_into_env, "file.exists", TRUE)
+  mockery::stub(load_dependencies_into_env, "read.dcf", desc)
+  mockery::stub(load_dependencies_into_env, "requireNamespace", TRUE)
+  mockery::stub(load_dependencies_into_env, "install_if_needed", function(...) invisible(TRUE))
+  
+  suppressWarnings(load_dependencies_into_env("fakepkg", env))
+  
+  expect_identical(get("filter", envir = env), dplyr::filter)
+})
+
 
 test_that("resolve_description_deps returns zero-row data.frame when all tokens are unparseable", {
   skip_on_cran()

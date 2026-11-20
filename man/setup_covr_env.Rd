@@ -38,6 +38,7 @@ A named list with components:
   `cov_env` before setup.}
   \item{helpers_loaded}{Character vector of helper files successfully
   sourced into `cov_env`.}
+  \item{setup_error}{`NULL`, or the error message if setup failed.}
 }
 }
 \description{
