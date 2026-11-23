@@ -503,10 +503,6 @@ create_coverage_skip_stf <- function(
     base::get("initial_state", envir = cov_env, inherits = FALSE) else
       base::ls(envir = cov_env, all.names = TRUE)
   
-  root_dir <- if (base::exists("root_dir", envir = cov_env, inherits = FALSE))
-    base::get("root_dir", envir = cov_env, inherits = FALSE) else
-      normalizePath(pkg_source_path, winslash = "/", mustWork = FALSE)
-  
   # Ensure we clean the env/workspace if the caller didn't (idempotent)
   on.exit({
     message(paste0("Cleaning up environment for ", pkg))
@@ -579,30 +575,22 @@ create_coverage_skip_stf <- function(
   
   # -------------------------------------------------------------------
   # Prepare test files in a TEMPORARY workspace (CRAN-safe).
-  # We never modify files under `tests/`; instead, copy to work_dir.
+  # We never modify files under `tests/`; instead, copy the whole test tree
+  # (data, snapshots, helpers, setup) to work_dir, so testthat can run the
+  # helper and setup files itself.
   # -------------------------------------------------------------------
   tmp_tests_dir <- file.path(cov_env$work_dir, "stf_tests")
-  dir.create(tmp_tests_dir, recursive = TRUE, showWarnings = FALSE)
-  
-  # Helper to copy a single test file to temp (preserving name) and return its path
-  copy_to_tmp <- function(src_path) {
-    tgt_path <- file.path(tmp_tests_dir, basename(src_path))
-    # use file.copy to temp; overwrite to be safe on re-runs
-    ok <- file.copy(src_path, tgt_path, overwrite = TRUE)
-    if (!ok) stop("Failed to copy test file to temp workspace: ", src_path)
-    tgt_path
-  }
   
   message(paste0("Preparing test files to check for : ", pkg))
-  if (length(test_skip_lines) > 0) {
-    # Only copy & modify the subset of test files that have skip ranges
-    test_files <- file.path(test_path, names(test_skip_lines))
-    tmp_files  <- vapply(test_files, copy_to_tmp, character(1), USE.NAMES = FALSE)
-    names(tmp_files) <- names(test_skip_lines)
-    
+  prepared_dir <- prepare_tests_dir(test_path, tmp_tests_dir)
+  
+  if (!is.null(prepared_dir)) {
     # Apply "comment-out" on the TEMP copies only
-    for (nm in names(test_skip_lines)) {
-      file_path <- tmp_files[[nm]]
+    invisible(lapply(names(test_skip_lines), function(nm) {
+      file_path <- file.path(tmp_tests_dir, nm)
+      if (!file.exists(file_path)) {
+        return(NULL)
+      }
       test_lines <- readLines(file_path, warn = FALSE)
       lines_to_comment <- test_skip_lines[[nm]]
       # Robust bounds check
@@ -611,31 +599,36 @@ create_coverage_skip_stf <- function(
         test_lines[lines_to_comment] <- sprintf("#%s", test_lines[lines_to_comment])
         cat(test_lines, file = file_path, sep = "\n")
       }
-    }
-    
-    # Use the temp copies for coverage
-    test_files <- unname(tmp_files)
-    
-  } else {
-    # No specific skip ranges: copy all tests to temp and use those
-    all_tests <- list.files(test_path, full.names = TRUE)
-    test_files <- vapply(all_tests, copy_to_tmp, character(1))
+      return(NULL)
+    }))
   }
   
-  # Run coverage
+  # Run coverage through testthat::test_dir() so helpers, setup, teardown, the
+  # working directory and TESTTHAT_PKG behave as in a normal test run
   message(paste0("Running environment coverage for ", pkg))
-  cvr <- tryCatch({
-    withr::with_dir(root_dir, {
-      # Same testthat context as the test run (see create_covr_list_no_skip)
-      withr::local_envvar(c(TESTTHAT = "true", TESTTHAT_PKG = pkg))
-      cov <- covr::environment_coverage(env = cov_env, test_files = test_files)
-      # clean problematic entries (avoid devtools vapply bug)
-      cov <- Filter(function(x) length(c(x$srcref, x$value)) == 9, cov)
+  cvr <- NULL
+  if (!is.null(prepared_dir)) {
+    cvr <- tryCatch({
+      cov <- run_environment_coverage(
+        pkg = pkg,
+        env = cov_env,
+        tests_dir = tmp_tests_dir,
+        pkg_source_path = pkg_source_path
+      )
+      if (!is.null(cov)) {
+        n_failed <- attr(cov, "n_failed")
+        n_error <- attr(cov, "n_error")
+        # clean problematic entries (avoid devtools vapply bug)
+        cov <- Filter(function(x) length(c(x$srcref, x$value)) == 9, cov)
+        attr(cov, "n_failed") <- n_failed
+        attr(cov, "n_error") <- n_error
+      }
       cov
+    }, error = function(e) {
+      message("Coverage failed: ", conditionMessage(e))
+      NULL
     })
-  }, error = function(e) {
-    NULL
-  })
+  }
   
   
   # Clean up newly introduced globals
@@ -784,10 +777,10 @@ create_covr_list_no_skip <- function(test_map,
   safe_unload_package(pkg)
   
   # Create environment for coverage
-  cov_env <- new.env(parent = globalenv())
+  run_env <- new.env(parent = globalenv())
   
-  # Load package into cov_env
-  load_package_into_env(pkg_source_path, pkg, cov_env)
+  # Load package into run_env
+  load_package_into_env(pkg_source_path, pkg, run_env)
   
   # Detect datasets used in test files
   available_datasets <- utils::data(package = pkg)$results[, "Item"]
@@ -816,7 +809,7 @@ create_covr_list_no_skip <- function(test_map,
     message(paste0("Loading datasets used in testing: ", paste(used_datasets, collapse = ", ")))
     for (ds in used_datasets) {
       tryCatch({
-        utils::data(list = ds, package = pkg, envir = cov_env)
+        utils::data(list = ds, package = pkg, envir = run_env)
       }, error = function(e) {
         message(paste0("Failed to load dataset ", ds, " : ", e$message))
       })
@@ -825,22 +818,52 @@ create_covr_list_no_skip <- function(test_map,
     message(paste0("Running coverage manually for ", pkg))
     
     coverage_error <- NULL
+    
+    # Copy the whole test tree (data, snapshots, helpers, setup) to a temp
+    # workspace so testthat::test_dir() can run helpers and setup itself
+    tests_dir <- prepare_tests_dir(
+      file.path(pkg_source_path, "tests", "testthat"),
+      tempfile("covr_tests_"),
+      test_files = test_map$file
+    )
+    on.exit(unlink(tests_dir, recursive = TRUE), add = TRUE)
+    
     coverage <- tryCatch({
-      # Match the testthat context of the test run: without these variables
-      # testthat::local_mocked_bindings() cannot find the package under test
-      # and fails when several packages are loaded with pkgload.
-      withr::local_envvar(c(TESTTHAT = "true", TESTTHAT_PKG = pkg))
-      result <- covr::environment_coverage(
-        env = cov_env,
-        test_files = test_files
-      )
-      rm(list = ls(envir = cov_env), envir = cov_env)
-      # clean problematic entries (avoid devtools vapply bug)
-      result <- Filter(function(x) length(c(x$srcref, x$value)) == 9, result)
+      result <- NULL
+      if (is.null(tests_dir)) {
+        coverage_error <- "Failed to copy the test directory to a temporary workspace"
+      } else {
+        # test_dir() sets TESTTHAT_PKG, so testthat::local_mocked_bindings()
+        # finds the package under test even when several packages are loaded
+        # with pkgload; failing tests no longer abort the coverage run
+        result <- run_environment_coverage(
+          pkg = pkg,
+          env = run_env,
+          tests_dir = tests_dir,
+          pkg_source_path = pkg_source_path
+        )
+        if (!is.null(result)) {
+          n_failed <- attr(result, "n_failed")
+          n_error <- attr(result, "n_error")
+          # clean problematic entries (avoid devtools vapply bug)
+          result <- Filter(function(x) length(c(x$srcref, x$value)) == 9, result)
+          attr(result, "n_failed") <- n_failed
+          attr(result, "n_error") <- n_error
+        }
+      }
+      rm(list = ls(envir = run_env), envir = run_env)
       result
     }, error = function(e) {
       coverage_error <<- e$message
-      cleanup_and_return_null(paste0("Error running coverage for ", pkg, " : ", e$message), env = cov_env)
+      cleanup_and_return_null(
+        paste0(
+          "Error running coverage for ", pkg, " : ", e$message,
+          " [TESTTHAT_PKG='", Sys.getenv("TESTTHAT_PKG"),
+          "'; pkgload namespaces: ",
+          paste(get_dev_namespaces(), collapse = ", "), "]"
+        ),
+        env = run_env
+      )
     })
     
   } else {
@@ -848,7 +871,7 @@ create_covr_list_no_skip <- function(test_map,
     # unload package before running package_coverage
     try(unloadNamespace(pkg), silent = TRUE)
     coverage <- covr::package_coverage(path = pkg_source_path, type = "tests")
-    rm(list = ls(envir = cov_env), envir = cov_env)
+    rm(list = ls(envir = run_env), envir = run_env)
   }
   
   # Enrich each test entry with passed, failed, and skipped counts
@@ -870,13 +893,27 @@ create_covr_list_no_skip <- function(test_map,
     total_failed <- sum(sapply(test_results_long, function(entry) entry$failed))
     tests_skipped <- Filter(function(entry) entry$skipped > 0, test_results_long)
     
+    # Report failing tests seen during the coverage run (coverage is still
+    # computed from the tests that ran)
+    n_failed_cov <- attr(coverage, "n_failed")
+    n_error_cov <- attr(coverage, "n_error")
+    cov_errors <- if (isTRUE(n_failed_cov + n_error_cov > 0)) {
+      sprintf(
+        "%d test failure(s) and %d error(s) during coverage run",
+        n_failed_cov,
+        n_error_cov
+      )
+    } else {
+      NA
+    }
+    
     res_cov <- list(
       name = pkg,
       coverage = list(
         filecoverage = filecoverage,
         totalcoverage = totalcoverage
       ),
-      errors = NA,
+      errors = cov_errors,
       notes = NA,
       passed = total_passed,
       failed = total_failed
@@ -910,7 +947,7 @@ create_covr_list_no_skip <- function(test_map,
     )
   }
   
-  cleanup_and_return_null(env = cov_env)
+  cleanup_and_return_null(env = run_env)
   
   return(covr_list)
 }

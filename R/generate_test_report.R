@@ -567,31 +567,69 @@ check_elements_simple <- function(x, elems, nested = FALSE) {
 }
 
 
-' Convert Character Vectors to Data Frames
+#' Convert Character Vectors to Data Frames
 #'
-#' This internal function takes named character vectors (e.g., `tests_skipped`, `tests_passing`)
+#' This internal function takes named elements (e.g., `tests_skipped`, `tests_passing`)
 #' from a list and converts them into data frames for easier reporting or processing.
+#' Character vectors give a `file` column; lists of test result entries (as returned
+#' by the standard testing framework) give `file`, `test` and `reason` columns.
 #'
-#' @param x A list containing character vectors (e.g., `test_results`).
+#' @param x A list containing character vectors or lists of test entries (e.g., `test_results`).
 #' @param elems A character vector of element names to convert (must exist in `x`).
 #'
-#' @return A named list of data frames, where each data frame has one column:
-#' \describe{
-#'   \item{file}{The file names or paths from the original character vector.}
-#' }
+#' @return A named list of data frames with at least a `file` column.
 #'
 #' @keywords internal
+#' @noRd
 convert_vectors_to_df <- function(x, elems) {
   # Filter only elements that exist
   elems <- elems[elems %in% names(x)]
   
   # Convert each to a data frame
   result <- lapply(elems, function(nm) {
-    data.frame(file = x[[nm]], stringsAsFactors = FALSE)
+    el <- x[[nm]]
+    is_entries <- is.list(el) && length(el) > 0L && is.null(names(el)) &&
+      all(vapply(el, is.list, logical(1)))
+    if (is_entries) {
+      return(convert_test_entries_to_df(el))
+    }
+    data.frame(file = el, stringsAsFactors = FALSE)
   })
   
   names(result) <- elems
   return(result)
+}
+
+#' Convert Test Result Entries to a Data Frame
+#'
+#' Flattens a list of per-test entries into one row per entry.
+#'
+#' @param entries List of entries with `file`, `test` and `results` elements.
+#'
+#' @return Data frame with character columns `file`, `test` and `reason`.
+#'
+#' @keywords internal
+#' @noRd
+convert_test_entries_to_df <- function(entries) {
+  first_chr <- function(v) {
+    out <- if (is.null(v) || length(v) == 0L) NA_character_ else as.character(v[[1L]])
+    return(out)
+  }
+  get_reason <- function(entry) {
+    msgs <- unlist(lapply(entry$results, function(r) {
+      if (is.list(r)) r$message else NULL
+    }))
+    out <- if (length(msgs) == 0L) NA_character_ else sub("^Reason: ", "", msgs[[1L]])
+    return(out)
+  }
+  out <- data.frame(
+    file = vapply(entries, function(e) first_chr(e$file), character(1)),
+    test = vapply(entries, function(e) first_chr(e$test), character(1)),
+    reason = vapply(entries, get_reason, character(1)),
+    stringsAsFactors = FALSE
+  )
+  rownames(out) <- NULL
+  return(out)
 }
 
 #' Generate Long Summary Details

@@ -713,8 +713,6 @@ test_that("create_coverage_skip_stf runs coverage with datasets", {
   # Keep project root stable
   mockery::stub(create_coverage_skip_stf, "find_project_root", function(...) pkg_source_path)
   
-  # Avoid changing the working directory for the test
-  mockery::stub(create_coverage_skip_stf, "withr::with_dir", function(new_dir, code) force(code))
   
   # No-op cleanup if used internally
   mockery::stub(create_coverage_skip_stf, "unlink", function(x, recursive = FALSE, force = FALSE) 0)
@@ -725,9 +723,11 @@ test_that("create_coverage_skip_stf runs coverage with datasets", {
     srcref = as.list(1:5),
     value  = as.list(1:4)
   ))
-  mockery::stub(create_coverage_skip_stf, "covr::environment_coverage", function(env, test_files) {
-    mock_cov_list
-  })
+  mockery::stub(
+    create_coverage_skip_stf,
+    "run_environment_coverage",
+    function(pkg, env, tests_dir, pkg_source_path) mock_cov_list
+  )
   
   # --- Act ---
   result <- create_coverage_skip_stf(
@@ -772,8 +772,7 @@ test_that("create_coverage_skip_stf skips the whole block for ERROR rows", {
   
   captured <- new.env(parent = emptyenv())
   mockery::stub(create_coverage_skip_stf, "cleanup_and_return_null", function(...) NULL)
-  mockery::stub(create_coverage_skip_stf, "covr::environment_coverage", function(...) list())
-  mockery::stub(create_coverage_skip_stf, "withr::with_dir", function(path, code) force(code))
+  mockery::stub(create_coverage_skip_stf, "run_environment_coverage", function(...) NULL)
   mockery::stub(create_coverage_skip_stf, "cat",
                 function(x, file, sep) captured$lines <- x)
   
@@ -821,8 +820,7 @@ test_that("create_coverage_skip_stf skips only expectation lines for FAILED rows
   
   captured <- new.env(parent = emptyenv())
   mockery::stub(create_coverage_skip_stf, "cleanup_and_return_null", function(...) NULL)
-  mockery::stub(create_coverage_skip_stf, "covr::environment_coverage", function(...) list())
-  mockery::stub(create_coverage_skip_stf, "withr::with_dir", function(path, code) force(code))
+  mockery::stub(create_coverage_skip_stf, "run_environment_coverage", function(...) NULL)
   mockery::stub(create_coverage_skip_stf, "cat",
                 function(x, file, sep) captured$lines <- x)
   
@@ -865,8 +863,7 @@ test_that("create_coverage_skip_stf falls back to expectation lines without bloc
   
   captured <- new.env(parent = emptyenv())
   mockery::stub(create_coverage_skip_stf, "cleanup_and_return_null", function(...) NULL)
-  mockery::stub(create_coverage_skip_stf, "covr::environment_coverage", function(...) list())
-  mockery::stub(create_coverage_skip_stf, "withr::with_dir", function(path, code) force(code))
+  mockery::stub(create_coverage_skip_stf, "run_environment_coverage", function(...) NULL)
   mockery::stub(create_coverage_skip_stf, "cat",
                 function(x, file, sep) captured$lines <- x)
   
@@ -1010,11 +1007,20 @@ test_that("create_covr_list_no_skip returns structured coverage list", {
     function(file, warn = FALSE) c("data(iris)", "data(mtcars)")
   )
   
+  # Prepared tests directory (real temp dir, removed by the function on exit)
+  prepared_dir <- tempfile("prepared_tests_")
+  dir.create(prepared_dir)
+  mockery::stub(
+    create_covr_list_no_skip,
+    "prepare_tests_dir",
+    function(...) prepared_dir
+  )
+  
   # Covr coverage over environment
   mock_coverage <- structure(list(), class = "coverage")
   mockery::stub(
     create_covr_list_no_skip,
-    "covr::environment_coverage",
+    "run_environment_coverage",
     function(...) mock_coverage
   )
   
@@ -1046,6 +1052,10 @@ test_that("create_covr_list_no_skip returns structured coverage list", {
   expect_equal(result$res_cov$passed, 1)
   expect_equal(result$res_cov$failed, 1)
   expect_true(is.list(result$tests_skipped))
+  # No failing tests during the coverage run -> no error text
+  expect_true(is.na(result$res_cov$errors))
+  # The prepared tests workspace is removed when the function exits
+  expect_false(dir.exists(prepared_dir))
 })
 
 
@@ -1208,7 +1218,7 @@ test_that("create_coverage_skip_stf reports no helpers when none exist", {
   mockery::stub(create_coverage_skip_stf, "cleanup_and_return_null", function(...) NULL)
   mockery::stub(create_coverage_skip_stf, "remove_new_globals", function(...) NULL)
   
-  mockery::stub(create_coverage_skip_stf, "covr::environment_coverage",
+  mockery::stub(create_coverage_skip_stf, "run_environment_coverage",
                 function(...) structure(list(), class = "coverage"))
   
   # Prevent actual file mutation during test
@@ -1217,8 +1227,6 @@ test_that("create_coverage_skip_stf reports no helpers when none exist", {
   
   mockery::stub(create_coverage_skip_stf, "safe_unload_package", function(...) NULL)
   
-  # Do not actually change directories
-  mockery::stub(create_coverage_skip_stf, "withr::with_dir", function(path, code) force(code))
   
   # ---- Capture messages ----
   msgs <- testthat::capture_messages({
@@ -1270,7 +1278,7 @@ test_that("create_coverage_skip_stf reports loaded helpers when helpers exist", 
   
   mockery::stub(
     create_coverage_skip_stf,
-    "covr::environment_coverage",
+    "run_environment_coverage",
     function(...) structure(list(), class = "coverage")
   )
   
@@ -1278,8 +1286,6 @@ test_that("create_coverage_skip_stf reports loaded helpers when helpers exist", 
   mockery::stub(create_coverage_skip_stf, "readLines", function(...) character())
   mockery::stub(create_coverage_skip_stf, "cat", function(...) NULL)
   
-  # Avoid directory switching
-  mockery::stub(create_coverage_skip_stf, "withr::with_dir", function(path, code) force(code))
   
   # ------------------------------
   # Capture messages
@@ -2001,7 +2007,7 @@ testthat::test_that("work_dir outside tempdir -> warns but proceeds", {
   mockery::stub(fx, "tempdir", function() file.path(base::tempdir(), "different_root"))
   
   # Stub heavy/external calls and no-ops for cleanup to keep test fast & deterministic
-  mockery::stub(fx, "covr::environment_coverage", function(env, test_files) list())
+  mockery::stub(fx, "run_environment_coverage", function(...) list())
   mockery::stub(fx, "remove_new_globals", function(env, initial_state) invisible(NULL))
   mockery::stub(fx, "cleanup_and_return_null", function(env) invisible(NULL))
   
@@ -2083,4 +2089,515 @@ testthat::test_that("FALSE when filecoverage has no names or dimnames", {
   
   out <- is_no_coverage_cov(cov)
   testthat::expect_false(out)
+})
+
+
+# ---- coverage run through testthat::test_dir() (run_environment_coverage) -----
+
+# One passed and one failed expectation, as produced by the earlier test run
+mock_results_long <- function() {
+  list(list(results = list(
+    structure(TRUE, class = "expectation_success"),
+    structure(TRUE, class = "expectation_failure")
+  )))
+}
+
+# Build create_covr_list_no_skip with all heavy dependencies stubbed
+build_no_skip_fn <- function(prepare_fn,
+                             run_cov_fn,
+                             cleanup_fn = function(...) NULL,
+                             data_fn = NULL) {
+  fn <- create_covr_list_no_skip
+  mockery::stub(fn, "safe_unload_package", function(pkg) TRUE)
+  mockery::stub(fn, "load_package_into_env", function(pkg_source_path, pkg, cov_env) TRUE)
+  if (is.null(data_fn)) {
+    data_fn <- function(package, ...) {
+      list(results = data.frame(Item = "iris", stringsAsFactors = FALSE))
+    }
+  }
+  mockery::stub(fn, "utils::data", data_fn)
+  mockery::stub(fn, "file.exists", function(...) TRUE)
+  mockery::stub(fn, "readLines", function(...) "data(iris)")
+  mockery::stub(fn, "prepare_tests_dir", prepare_fn)
+  mockery::stub(fn, "run_environment_coverage", run_cov_fn)
+  mockery::stub(
+    fn,
+    "covr::coverage_to_list",
+    function(x) list(filecoverage = matrix(1, nrow = 1), totalcoverage = 50)
+  )
+  mockery::stub(fn, "cleanup_and_return_null", cleanup_fn)
+  return(fn)
+}
+
+test_that("create_covr_list_no_skip uses its own run env and leaves cov_env intact", {
+  prepared_dir <- tempfile("prepared_tests_")
+  dir.create(prepared_dir)
+  seen <- new.env()
+  fn <- build_no_skip_fn(
+    prepare_fn = function(...) prepared_dir,
+    run_cov_fn = function(pkg, env, tests_dir, pkg_source_path) {
+      seen$pkg <- pkg
+      seen$env <- env
+      seen$tests_dir <- tests_dir
+      seen$source <- pkg_source_path
+      structure(list(), class = "coverage")
+    }
+  )
+  cov_env <- new.env(parent = emptyenv())
+  cov_env$sentinel <- "keep"
+  
+  result <- fn(
+    test_map = data.frame(file = "test-one.R", stringsAsFactors = FALSE),
+    test_results_long = mock_results_long(),
+    pkg_source_path = "mock/path",
+    pkg = "mockpkg",
+    cov_env = cov_env
+  )
+  
+  expect_identical(seen$pkg, "mockpkg")
+  expect_identical(seen$tests_dir, prepared_dir)
+  expect_identical(seen$source, "mock/path")
+  expect_false(identical(seen$env, cov_env))
+  expect_identical(cov_env$sentinel, "keep")
+  expect_equal(result$total_cov, 0.5)
+})
+
+test_that("create_covr_list_no_skip reports failing tests but keeps partial coverage", {
+  prepared_dir <- tempfile("prepared_tests_")
+  dir.create(prepared_dir)
+  fn <- build_no_skip_fn(
+    prepare_fn = function(...) prepared_dir,
+    run_cov_fn = function(...) {
+      structure(list(), class = "coverage", n_failed = 2L, n_error = 1L)
+    }
+  )
+  
+  result <- fn(
+    test_map = data.frame(file = "test-one.R", stringsAsFactors = FALSE),
+    test_results_long = mock_results_long(),
+    pkg_source_path = "mock/path",
+    pkg = "mockpkg",
+    cov_env = new.env()
+  )
+  
+  expect_equal(result$total_cov, 0.5)
+  expect_identical(
+    result$res_cov$errors,
+    "2 test failure(s) and 1 error(s) during coverage run"
+  )
+})
+
+test_that("create_covr_list_no_skip returns zero coverage when no coverage is produced", {
+  prepared_dir <- tempfile("prepared_tests_")
+  dir.create(prepared_dir)
+  fn <- build_no_skip_fn(
+    prepare_fn = function(...) prepared_dir,
+    run_cov_fn = function(...) NULL
+  )
+  
+  expect_message(
+    result <- fn(
+      test_map = data.frame(file = "test-one.R", stringsAsFactors = FALSE),
+      test_results_long = list(),
+      pkg_source_path = "mock/path",
+      pkg = "mockpkg",
+      cov_env = new.env()
+    ),
+    "No test coverage for this configuration"
+  )
+  
+  expect_equal(result$total_cov, 0)
+  expect_identical(result$res_cov$errors, "No testthat or testit configuration")
+})
+
+test_that("create_covr_list_no_skip reports the pkgload context when coverage errors", {
+  prepared_dir <- tempfile("prepared_tests_")
+  dir.create(prepared_dir)
+  captured <- new.env()
+  fn <- build_no_skip_fn(
+    prepare_fn = function(...) prepared_dir,
+    run_cov_fn = function(...) stop("Multiple packages loaded with pkgload"),
+    cleanup_fn = function(msg = NULL, env) {
+      if (!is.null(msg)) {
+        captured$msg <- msg
+        captured$env <- env
+      }
+      NULL
+    }
+  )
+  mockery::stub(fn, "get_dev_namespaces", function() c("admeris", "test.assessr"))
+  cov_env <- new.env()
+  
+  result <- fn(
+    test_map = data.frame(file = "test-one.R", stringsAsFactors = FALSE),
+    test_results_long = list(),
+    pkg_source_path = "mock/path",
+    pkg = "mockpkg",
+    cov_env = cov_env
+  )
+  
+  expect_match(captured$msg, "Multiple packages loaded with pkgload", fixed = TRUE)
+  expect_match(captured$msg, "pkgload namespaces: admeris, test.assessr", fixed = TRUE)
+  expect_match(captured$msg, "TESTTHAT_PKG=", fixed = TRUE)
+  # The caller's cov_env is not the environment that gets cleaned
+  expect_false(identical(captured$env, cov_env))
+  expect_equal(result$total_cov, 0)
+  expect_identical(
+    result$res_cov$errors,
+    "Error running coverage: Multiple packages loaded with pkgload"
+  )
+})
+
+test_that("create_covr_list_no_skip stops cleanly when the tests cannot be copied", {
+  run_cov <- mockery::mock(NULL)
+  fn <- build_no_skip_fn(
+    prepare_fn = function(...) NULL,
+    run_cov_fn = run_cov
+  )
+  
+  result <- fn(
+    test_map = data.frame(file = "test-one.R", stringsAsFactors = FALSE),
+    test_results_long = list(),
+    pkg_source_path = "mock/path",
+    pkg = "mockpkg",
+    cov_env = new.env()
+  )
+  
+  mockery::expect_called(run_cov, 0)
+  expect_equal(result$total_cov, 0)
+  expect_match(result$res_cov$errors, "Failed to copy the test directory", fixed = TRUE)
+})
+
+# Fixture for create_coverage_skip_stf with helper, setup and data files
+make_skip_stf_fixture <- function() {
+  pkg_dir <- tempfile("pkgcov_")
+  test_path <- file.path(pkg_dir, "tests", "testthat")
+  dir.create(file.path(test_path, "data"), recursive = TRUE)
+  writeLines(paste0("line", 1:12), file.path(test_path, "test-blk.R"))
+  writeLines("hx <- function() 1", file.path(test_path, "helper-x.R"))
+  writeLines("setup_obj <- 1", file.path(test_path, "setup.R"))
+  saveRDS(1, file.path(test_path, "data", "val.rds"))
+  cov_env <- new.env(parent = emptyenv())
+  cov_env$work_dir <- tempfile("work_")
+  dir.create(cov_env$work_dir, recursive = TRUE)
+  test_skip <- data.frame(
+    file = "test-blk.R",
+    line1 = c(3, 8),
+    line2 = c(3, 8),
+    stringsAsFactors = FALSE
+  )
+  return(list(
+    pkg_dir = pkg_dir,
+    test_path = test_path,
+    cov_env = cov_env,
+    test_skip = test_skip
+  ))
+}
+
+test_that("create_coverage_skip_stf runs the copied test tree with skip lines commented", {
+  fx <- make_skip_stf_fixture()
+  seen <- new.env()
+  mockery::stub(create_coverage_skip_stf, "cleanup_and_return_null", function(...) NULL)
+  mockery::stub(create_coverage_skip_stf, "remove_new_globals", function(...) NULL)
+  mockery::stub(
+    create_coverage_skip_stf,
+    "run_environment_coverage",
+    function(pkg, env, tests_dir, pkg_source_path) {
+      seen$pkg <- pkg
+      seen$env <- env
+      seen$tests_dir <- tests_dir
+      seen$source <- pkg_source_path
+      seen$files <- list.files(tests_dir, recursive = TRUE, all.files = TRUE)
+      seen$copy_lines <- readLines(file.path(tests_dir, "test-blk.R"))
+      structure(
+        list(list(srcref = as.list(1:5), value = as.list(1:4))),
+        n_failed = 3L,
+        n_error = 1L
+      )
+    }
+  )
+  
+  result <- create_coverage_skip_stf(
+    pkg_source_path = fx$pkg_dir,
+    pkg = "mockpkg",
+    test_path = fx$test_path,
+    test_skip = fx$test_skip,
+    test_map = data.frame(file = "test-blk.R"),
+    cov_env = fx$cov_env
+  )
+  
+  expect_identical(seen$pkg, "mockpkg")
+  expect_identical(seen$source, fx$pkg_dir)
+  expect_identical(seen$env, fx$cov_env)
+  # The whole tests tree (helper, setup, data) is available to testthat
+  expect_true(all(
+    c("helper-x.R", "setup.R", "test-blk.R", file.path("data", "val.rds")) %in% seen$files
+  ))
+  # Skip lines are commented out in the copy only
+  expect_true(all(grepl("^#", seen$copy_lines[c(3, 8)])))
+  expect_false(any(grepl("^#", seen$copy_lines[-c(3, 8)])))
+  expect_false(any(grepl("^#", readLines(file.path(fx$test_path, "test-blk.R")))))
+  # Failure counts survive the Filter() step
+  expect_identical(attr(result, "n_failed"), 3L)
+  expect_identical(attr(result, "n_error"), 1L)
+})
+
+test_that("create_coverage_skip_stf reports a coverage error and returns NULL", {
+  fx <- make_skip_stf_fixture()
+  mockery::stub(create_coverage_skip_stf, "cleanup_and_return_null", function(...) NULL)
+  mockery::stub(create_coverage_skip_stf, "remove_new_globals", function(...) NULL)
+  mockery::stub(
+    create_coverage_skip_stf,
+    "run_environment_coverage",
+    function(...) stop("boom")
+  )
+  
+  expect_message(
+    result <- create_coverage_skip_stf(
+      pkg_source_path = fx$pkg_dir,
+      pkg = "mockpkg",
+      test_path = fx$test_path,
+      test_skip = fx$test_skip,
+      test_map = data.frame(file = "test-blk.R"),
+      cov_env = fx$cov_env
+    ),
+    "Coverage failed: boom",
+    fixed = TRUE
+  )
+  
+  expect_null(result)
+})
+
+test_that("create_coverage_skip_stf skips the coverage run when the tests cannot be copied", {
+  fx <- make_skip_stf_fixture()
+  run_cov <- mockery::mock(NULL)
+  mockery::stub(create_coverage_skip_stf, "cleanup_and_return_null", function(...) NULL)
+  mockery::stub(create_coverage_skip_stf, "remove_new_globals", function(...) NULL)
+  mockery::stub(create_coverage_skip_stf, "prepare_tests_dir", function(...) NULL)
+  mockery::stub(create_coverage_skip_stf, "run_environment_coverage", run_cov)
+  
+  result <- create_coverage_skip_stf(
+    pkg_source_path = fx$pkg_dir,
+    pkg = "mockpkg",
+    test_path = fx$test_path,
+    test_skip = fx$test_skip,
+    test_map = data.frame(file = "test-blk.R"),
+    cov_env = fx$cov_env
+  )
+  
+  mockery::expect_called(run_cov, 0)
+  expect_null(result)
+})
+
+test_that("create_coverage_skip_stf ignores skip entries without a copied file", {
+  fx <- make_skip_stf_fixture()
+  seen <- new.env()
+  mockery::stub(create_coverage_skip_stf, "cleanup_and_return_null", function(...) NULL)
+  mockery::stub(create_coverage_skip_stf, "remove_new_globals", function(...) NULL)
+  mockery::stub(
+    create_coverage_skip_stf,
+    "run_environment_coverage",
+    function(pkg, env, tests_dir, pkg_source_path) {
+      seen$called <- TRUE
+      NULL
+    }
+  )
+  test_skip <- data.frame(
+    file = "test-missing.R",
+    line1 = 1,
+    line2 = 1,
+    stringsAsFactors = FALSE
+  )
+  
+  result <- create_coverage_skip_stf(
+    pkg_source_path = fx$pkg_dir,
+    pkg = "mockpkg",
+    test_path = fx$test_path,
+    test_skip = test_skip,
+    test_map = data.frame(file = "test-missing.R"),
+    cov_env = fx$cov_env
+  )
+  
+  expect_true(isTRUE(seen$called))
+  expect_null(result)
+})
+
+
+# ---- additional branch coverage ------------------------------------------------
+
+test_that("run_covr_skip_stf reports an error from map_tests_stf and returns an empty list", {
+  pkg_source_path <- tempfile("mockpkg_")
+  dir.create(file.path(pkg_source_path, "tests", "testthat"),
+             recursive = TRUE, showWarnings = FALSE)
+  on.exit(unlink(pkg_source_path, recursive = TRUE, force = TRUE), add = TRUE)
+  
+  mock_test_pkg_data <- list(has_testthat = TRUE, has_testit = FALSE, has_tests_base = FALSE)
+  
+  mockery::stub(run_covr_skip_stf, "checkmate::assert_string", TRUE)
+  mockery::stub(run_covr_skip_stf, "checkmate::assert_directory_exists", TRUE)
+  mockery::stub(run_covr_skip_stf, "checkmate::assert_environment", TRUE)
+  mockery::stub(run_covr_skip_stf, "get_pkg_name", function(...) "mockpkg")
+  mockery::stub(run_covr_skip_stf, "get_stf_test_path", function(x, testdir) testdir)
+  mockery::stub(run_covr_skip_stf, "setwd", function(...) NULL)
+  mockery::stub(run_covr_skip_stf, "testthat::set_max_fails", function(...) NULL)
+  mockery::stub(run_covr_skip_stf, "unloadNamespace", function(...) NULL)
+  mockery::stub(run_covr_skip_stf, "setup_covr_env", function(...) {
+    list(datasets_loaded = TRUE, root_dir = ".", initial_state = list(), helpers_loaded = TRUE)
+  })
+  mockery::stub(run_covr_skip_stf, "create_fail_reporter", function(...) NULL)
+  mockery::stub(run_covr_skip_stf, "create_test_reporter",
+                function(...) list(list(file = "test-a.R", context = "script1")))
+  mockery::stub(run_covr_skip_stf, "fix_test_context", function(x) x)
+  
+  # ---- map_tests_stf throws, so the error handler must run ----
+  mockery::stub(run_covr_skip_stf, "map_tests_stf", function(...) stop("boom"))
+  
+  result <- NULL
+  msgs <- testthat::capture_messages({
+    result <- run_covr_skip_stf(
+      pkg_source_path = pkg_source_path,
+      test_pkg_data   = mock_test_pkg_data,
+      cov_env         = new.env(parent = emptyenv())
+    )
+  })
+  
+  expect_true(any(grepl("Error mapping tests for mockpkg : boom", msgs, fixed = TRUE)))
+  expect_true(any(grepl("Test map could not be created for mockpkg", msgs, fixed = TRUE)))
+  expect_equal(result$total_cov, 0)
+  expect_equal(result$res_cov$errors, "Test map creation failed")
+})
+
+test_that("create_coverage_skip_stf keeps expectation lines when block columns have no status", {
+  fx <- make_skip_stf_fixture()
+  seen <- new.env()
+  mockery::stub(create_coverage_skip_stf, "cleanup_and_return_null", function(...) NULL)
+  mockery::stub(create_coverage_skip_stf, "remove_new_globals", function(...) NULL)
+  mockery::stub(
+    create_coverage_skip_stf,
+    "run_environment_coverage",
+    function(pkg, env, tests_dir, pkg_source_path) {
+      seen$copy_lines <- readLines(file.path(tests_dir, "test-blk.R"))
+      NULL
+    }
+  )
+  
+  # Block columns present, but no `status` column: rows are not treated as ERROR
+  test_skip <- data.frame(
+    file = "test-blk.R",
+    line1 = 5,
+    line2 = 5,
+    block_line1 = 2,
+    block_line2 = 10,
+    stringsAsFactors = FALSE
+  )
+  
+  create_coverage_skip_stf(
+    pkg_source_path = fx$pkg_dir,
+    pkg = "mockpkg",
+    test_path = fx$test_path,
+    test_skip = test_skip,
+    test_map = data.frame(file = "test-blk.R"),
+    cov_env = fx$cov_env
+  )
+  
+  expect_true(grepl("^#", seen$copy_lines[5]))
+  expect_false(any(grepl("^#", seen$copy_lines[-5])))
+})
+
+test_that("create_coverage_skip_stf leaves the copy untouched when no line numbers are finite", {
+  fx <- make_skip_stf_fixture()
+  seen <- new.env()
+  mockery::stub(create_coverage_skip_stf, "cleanup_and_return_null", function(...) NULL)
+  mockery::stub(create_coverage_skip_stf, "remove_new_globals", function(...) NULL)
+  mockery::stub(
+    create_coverage_skip_stf,
+    "run_environment_coverage",
+    function(pkg, env, tests_dir, pkg_source_path) {
+      seen$copy_lines <- readLines(file.path(tests_dir, "test-blk.R"))
+      NULL
+    }
+  )
+  
+  # Every row has a missing line range, so no skip lines can be derived
+  test_skip <- data.frame(
+    file = "test-blk.R",
+    line1 = NA_real_,
+    line2 = NA_real_,
+    stringsAsFactors = FALSE
+  )
+  
+  create_coverage_skip_stf(
+    pkg_source_path = fx$pkg_dir,
+    pkg = "mockpkg",
+    test_path = fx$test_path,
+    test_skip = test_skip,
+    test_map = data.frame(file = "test-blk.R"),
+    cov_env = fx$cov_env
+  )
+  
+  expect_identical(seen$copy_lines, paste0("line", 1:12))
+})
+
+test_that("create_coverage_skip_stf only comments rows with finite line numbers", {
+  fx <- make_skip_stf_fixture()
+  seen <- new.env()
+  mockery::stub(create_coverage_skip_stf, "cleanup_and_return_null", function(...) NULL)
+  mockery::stub(create_coverage_skip_stf, "remove_new_globals", function(...) NULL)
+  mockery::stub(
+    create_coverage_skip_stf,
+    "run_environment_coverage",
+    function(pkg, env, tests_dir, pkg_source_path) {
+      seen$copy_lines <- readLines(file.path(tests_dir, "test-blk.R"))
+      NULL
+    }
+  )
+  
+  test_skip <- data.frame(
+    file = "test-blk.R",
+    line1 = c(4, NA),
+    line2 = c(4, NA),
+    stringsAsFactors = FALSE
+  )
+  
+  create_coverage_skip_stf(
+    pkg_source_path = fx$pkg_dir,
+    pkg = "mockpkg",
+    test_path = fx$test_path,
+    test_skip = test_skip,
+    test_map = data.frame(file = "test-blk.R"),
+    cov_env = fx$cov_env
+  )
+  
+  expect_true(grepl("^#", seen$copy_lines[4]))
+  expect_false(any(grepl("^#", seen$copy_lines[-4])))
+})
+
+test_that("create_covr_list_no_skip reports a dataset that fails to load and continues", {
+  prepared_dir <- tempfile("prepared_tests_")
+  dir.create(prepared_dir)
+  fn <- build_no_skip_fn(
+    prepare_fn = function(...) prepared_dir,
+    run_cov_fn = function(...) structure(list(), class = "coverage"),
+    data_fn = function(package, list = NULL, ...) {
+      if (!is.null(list)) {
+        stop("cannot load")
+      }
+      list(results = data.frame(Item = "iris", stringsAsFactors = FALSE))
+    }
+  )
+  
+  result <- NULL
+  msgs <- testthat::capture_messages({
+    result <- fn(
+      test_map = data.frame(file = "test-one.R", stringsAsFactors = FALSE),
+      test_results_long = mock_results_long(),
+      pkg_source_path = "mock/path",
+      pkg = "mockpkg",
+      cov_env = new.env()
+    )
+  })
+  
+  expect_true(any(grepl("Failed to load dataset iris : cannot load", msgs, fixed = TRUE)))
+  # Coverage is still produced after the dataset failure
+  expect_equal(result$total_cov, 0.5)
 })
