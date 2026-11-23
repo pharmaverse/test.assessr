@@ -292,6 +292,24 @@ test_that("generate_test_report creates an HTML report", {
   
 })
 
+test_that("generate_test_report disables mathjax to avoid pandoc deprecation warning", {
+  testthat::skip_if_not_installed("mockery")
+  tmp_dir <- withr::local_tempdir()
+  withr::local_envvar(NOT_CRAN = "true")
+  
+  captured <- NULL
+  mockery::stub(generate_test_report, "rmarkdown::render", function(...) {
+    captured <<- list(...)
+    invisible(NULL)
+  })
+  
+  generate_test_report(toy_assessment_results, tmp_dir)
+  
+  expect_true("output_options" %in% names(captured))
+  expect_true("mathjax" %in% names(captured$output_options))
+  expect_null(captured$output_options$mathjax)
+})
+
 test_that("generate_test_report accepts multi-framework input", {
   skip_on_cran()
   testthat::skip_if_not_installed("rmarkdown")
@@ -603,6 +621,37 @@ test_that("convert_vectors_to_df handles list with additional names without affe
   # For list element, data.frame(file = x[[nm]]) will create a list-column; ensure it exists
   expect_true("foo" %in% names(res$inner_list))
   expect_equal(nrow(res$inner_list), length(x$inner_list))
+})
+
+make_skipped_entries <- function() {
+  skip_result <- structure(
+    list(message = "Reason: arrow is installed", test = "t2"),
+    class = c("expectation_skip", "expectation", "condition")
+  )
+  list(
+    list(file = "test-a.R", test = "t1", results = list(skip_result)),
+    list(file = "test-b.R", test = "t2", results = list())
+  )
+}
+
+test_that("convert_vectors_to_df flattens standard framework skipped entries", {
+  x <- list(tests_skipped = make_skipped_entries())
+  
+  res <- convert_vectors_to_df(x, "tests_skipped")
+  
+  expect_s3_class(res$tests_skipped, "data.frame")
+  expect_identical(res$tests_skipped$file, c("test-a.R", "test-b.R"))
+  expect_identical(res$tests_skipped$test, c("t1", "t2"))
+  expect_identical(res$tests_skipped$reason, c("arrow is installed", NA_character_))
+})
+
+test_that("convert_test_entries_to_df handles entries missing file and test", {
+  res <- convert_test_entries_to_df(list(list(results = list())))
+  
+  expect_identical(nrow(res), 1L)
+  expect_true(is.na(res$file))
+  expect_true(is.na(res$test))
+  expect_true(is.na(res$reason))
 })
 
 

@@ -183,6 +183,9 @@ generate_test_report <- function(test_results, output_dir = NULL) {
     rmarkdown::render(
       input       = template_path,
       output_file = output_file,
+      # Report has no LaTeX math; NULL stops html_document emitting the
+      # deprecated pandoc `--mathjax` flag (pandoc >= 3.x warning).
+      output_options = list(mathjax = NULL),
       envir       = report_env,
       quiet       = TRUE
     )
