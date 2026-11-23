@@ -658,7 +658,7 @@ test_that("returns no-skip coverage result when all tests pass", {
   # Assertions
   # ------------------------------------------------------------------
   expect_true(is.list(result))
-  expect_named(result, c("total_cov", "res_cov", "tests_skipped"))
+  expect_named(result, c("total_cov", "res_cov", "tests_skipped", "long_summary"))
   
   expect_equal(result$total_cov, 0.5)
   expect_equal(result$res_cov$name, "mockpkg")
@@ -2600,4 +2600,52 @@ test_that("create_covr_list_no_skip reports a dataset that fails to load and con
   expect_true(any(grepl("Failed to load dataset iris : cannot load", msgs, fixed = TRUE)))
   # Coverage is still produced after the dataset failure
   expect_equal(result$total_cov, 0.5)
+})
+
+test_that("run_covr_skip_stf keeps long_summary when no tests fail (no-skip path)", {
+  
+  pkg_source_path <- file.path(tempdir(), "mockpkg_noskip")
+  dir.create(file.path(pkg_source_path, "tests", "testthat"), recursive = TRUE, showWarnings = FALSE)
+  
+  mock_long <- data.frame(
+    file = c("test-a.R", "test-b.R"), context = c("s1", "s2"),
+    test = c("t1", "t2"), status = c("PASS", "PASS"),
+    n = c(1, 1), time = c(0.01, 0.02), stringsAsFactors = FALSE
+  )
+  mock_map <- data.frame(
+    test = c("t1", "t2"), expectation = c("expect_equal", "expect_true"),
+    line1 = c(2, 4), line2 = c(2, 4), file = c("test-a.R", "test-b.R"),
+    stringsAsFactors = FALSE
+  )
+  
+  mockery::stub(run_covr_skip_stf, "checkmate::assert_string", TRUE)
+  mockery::stub(run_covr_skip_stf, "checkmate::assert_directory_exists", TRUE)
+  mockery::stub(run_covr_skip_stf, "checkmate::assert_environment", TRUE)
+  mockery::stub(run_covr_skip_stf, "get_pkg_name", function(...) "mockpkg")
+  mockery::stub(run_covr_skip_stf, "get_stf_test_path", function(x, testdir) testdir)
+  mockery::stub(run_covr_skip_stf, "setwd", function(...) NULL)
+  mockery::stub(run_covr_skip_stf, "setup_covr_env", function(...) {
+    list(datasets_loaded = TRUE, root_dir = ".", initial_state = list(), helpers_loaded = TRUE)
+  })
+  mockery::stub(run_covr_skip_stf, "unloadNamespace", function(...) NULL)
+  mockery::stub(run_covr_skip_stf, "create_fail_reporter", function(...) NULL)
+  mockery::stub(run_covr_skip_stf, "create_test_reporter", function(...) {
+    list(list(file = "test-a.R", context = "s1"), list(file = "test-b.R", context = "s2"))
+  })
+  mockery::stub(run_covr_skip_stf, "fix_test_context", function(x) x)
+  mockery::stub(run_covr_skip_stf, "map_tests_stf", function(...) mock_map)
+  mockery::stub(run_covr_skip_stf, "get_tests_long_sum_stf", function(...) mock_long)
+  mockery::stub(run_covr_skip_stf, "create_covr_list_no_skip", function(...) {
+    list(total_cov = 0.9, res_cov = list(name = "mockpkg"), tests_skipped = list())
+  })
+  
+  result <- run_covr_skip_stf(
+    pkg_source_path = pkg_source_path,
+    test_pkg_data = list(has_testthat = TRUE, has_testit = FALSE, has_tests_base = FALSE),
+    cov_env = new.env(parent = emptyenv())
+  )
+  
+  expect_true("long_summary" %in% names(result))
+  expect_equal(nrow(result$long_summary), 2L)
+  expect_true(all(c("code_script", "context") %in% names(result$long_summary)))
 })

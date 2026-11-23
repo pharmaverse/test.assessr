@@ -221,6 +221,12 @@ run_covr_skip_stf <- function(pkg_source_path,
                                           pkg_source_path = pkg_source_path,
                                           pkg = pkg,
                                           cov_env = cov_env)
+    
+    # Keep the long-format results so the report can list passing tests
+    # (otherwise the report finds no standard-framework content)
+    if (is.list(covr_list) && is.null(covr_list$long_summary)) {
+      covr_list$long_summary <- test_results_long
+    }
   }
   
   return(covr_list)

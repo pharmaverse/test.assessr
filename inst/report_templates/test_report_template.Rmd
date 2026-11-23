@@ -195,7 +195,7 @@ if (has_stf && !has_nstf) {
     ids.forEach(function(id) {
       var el = document.getElementById(id);
       if (el) {
-        el.style.visibility = (id === showId) ? "visible" : "hidden";
+        el.style.display = (id === showId) ? "block" : "none";
       }
     });
   }
@@ -221,7 +221,7 @@ if (has_stf && !has_nstf) {
     var showId = value === "no" ? "no_tests" : value === "skipped" ? "tests_skipped" : "tests_passing";
     ids.forEach(function(id) {
       var el = document.getElementById(id);
-      if (el) el.style.visibility = (id === showId) ? "visible" : "hidden";
+      if (el) el.style.display = (id === showId) ? "block" : "none";
     });
   }
   document.addEventListener("DOMContentLoaded", function() {
@@ -231,16 +231,24 @@ if (has_stf && !has_nstf) {
 </script>
 ')
 } else if (has_stf && has_nstf) {
-  cat('
+  # Offer only the non-standard options that have data (when known)
+  nstf_avail <- if (exists("nstf_available", envir = report_env, inherits = FALSE)) {
+    get("nstf_available", envir = report_env)
+  } else {
+    c(no = TRUE, skipped = TRUE, passing = TRUE)
+  }
+  nstf_options <- paste0(
+    if (isTRUE(nstf_avail[["no"]])) '<option value="no">No Tests</option>\n' else "",
+    if (isTRUE(nstf_avail[["skipped"]])) '<option value="skipped">Tests Skipped (NSTF)</option>\n' else "",
+    if (isTRUE(nstf_avail[["passing"]])) '<option value="passing">Tests Passing</option>\n' else ""
+  )
+  cat(paste0('
 <div style="margin-bottom: 20px;">
   <label for="matrixSelector" style="background-color: purple; color: white; font-size: 20px; font-weight: bold; padding: 10px; border-radius: 5px; display: inline-block; margin-bottom: 10px;">Select Test Type:</label>
   <select id="matrixSelector" onchange="toggleMatrix(this.value)" style="margin-left: 10px; padding: 6px; font-size: 18px; border-radius: 4px;">
     <option value="long_summary">Tests Passed</option>
     <option value="tests_skip">Tests Skipped</option>
-    <option value="no">No Tests</option>
-    <option value="skipped">Tests Skipped (NSTF)</option>
-    <option value="passing">Tests Passing</option>
-  </select>
+', nstf_options, '  </select>
 </div>
 <script>
   function toggleMatrix(value) {
@@ -252,7 +260,7 @@ if (has_stf && !has_nstf) {
   }
   document.addEventListener("DOMContentLoaded", function() { toggleMatrix(document.getElementById("matrixSelector") ? document.getElementById("matrixSelector").value : "long_summary"); });
 </script>
-')
+'))
 }
 ```
 
@@ -285,6 +293,9 @@ if (!multi_framework && has_stf) {
 
   # --- SKIPPED TESTS CONTENT ---
   tests_skip_df <- get("tests_skip_df", envir = report_env)
+  tests_skipped_stf_df <- if (exists("tests_skipped_stf_df", envir = report_env, inherits = FALSE)) {
+    get("tests_skipped_stf_df", envir = report_env)
+  } else NULL
 
   tests_skip_content <- if (is.data.frame(tests_skip_df) && nrow(tests_skip_df) > 0) {
     DT::datatable(
@@ -298,6 +309,19 @@ if (!multi_framework && has_stf) {
       ),
       rownames = FALSE
     )
+  } else if (is.data.frame(tests_skipped_stf_df) && nrow(tests_skipped_stf_df) > 0) {
+    # skipped expectations recorded by testthat (file / test / reason)
+    DT::datatable(
+      tests_skipped_stf_df,
+      elementId = "dt_stf_tests_skipped_entries",
+      options = list(pageLength = 10, lengthMenu = c(10, 20, 50), dom = "Bfrtip"),
+      colnames = c("Test file", "Test", "Skip reason")[seq_len(ncol(tests_skipped_stf_df))],
+      caption = tags$caption(
+        style = "caption-side: top; text-align: left;",
+        tags$strong(tags$u("Skipped Tests"))
+      ),
+      rownames = FALSE
+    )
   } else {
     tags$div(style = "padding: 8px;", "No skipped tests.")
   }
@@ -305,18 +329,18 @@ if (!multi_framework && has_stf) {
   # --- WRAP ONCE (NO DUPLICATE IDs), TOGGLE BY VISIBILITY ---
   long_div <- tags$div(
     id = "long_summary",
-    style = "position:absolute; top:0; left:0; right:0; visibility:visible;",
+    style = "display:block;",
     long_summary_content
   )
 
   skip_div <- tags$div(
     id = "tests_skip",
-    style = "position:absolute; top:0; left:0; right:0; visibility:hidden;",
+    style = "display:none;",
     tests_skip_content
   )
 
   tags$div(
-    style = "position:relative; min-height:300px;",
+    style = "position:relative; margin-bottom:20px;",
     tagList(long_div, skip_div)
   )
 }
@@ -359,10 +383,21 @@ if (!multi_framework && has_nstf) {
   } else {
     htmltools::tags$div(style = "padding: 8px;", "No passing tests.")
   }
-  no_tests_div <- htmltools::tags$div(id = "no_tests", style = "position:absolute; top:0; left:0; right:0; visibility:visible;", no_tests_content)
-  tests_skipped_div <- htmltools::tags$div(id = "tests_skipped", style = "position:absolute; top:0; left:0; right:0; visibility:hidden;", tests_skipped_content)
-  tests_passing_div <- htmltools::tags$div(id = "tests_passing", style = "position:absolute; top:0; left:0; right:0; visibility:hidden;", tests_passing_content)
-  htmltools::tags$div(style = "position:relative; min-height:300px;", htmltools::tagList(no_tests_div, tests_skipped_div, tests_passing_div))
+  no_tests_div <- htmltools::tags$div(id = "no_tests", style = "display:block;", no_tests_content)
+  tests_skipped_div <- htmltools::tags$div(id = "tests_skipped", style = "display:none;", tests_skipped_content)
+  tests_passing_div <- htmltools::tags$div(id = "tests_passing", style = "display:none;", tests_passing_content)
+  # When the standard framework is also shown, drop NSTF panels without data
+  nstf_avail <- if (has_stf && exists("nstf_available", envir = report_env, inherits = FALSE)) {
+    get("nstf_available", envir = report_env)
+  } else {
+    c(no = TRUE, skipped = TRUE, passing = TRUE)
+  }
+  nstf_panels <- c(
+    if (isTRUE(nstf_avail[["no"]])) list(no_tests_div),
+    if (isTRUE(nstf_avail[["skipped"]])) list(tests_skipped_div),
+    if (isTRUE(nstf_avail[["passing"]])) list(tests_passing_div)
+  )
+  htmltools::tags$div(style = "position:relative; margin-bottom:20px;", htmltools::tagList(nstf_panels))
 }
 ```
 

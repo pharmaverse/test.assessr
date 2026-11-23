@@ -75,14 +75,15 @@ generate_test_report <- function(test_results, output_dir = NULL) {
     if ("functions_no_tests" %in% nstf_elements$present) {
       nstf_df_list$functions_no_tests <- test_results$functions_no_tests
       short_is_needed <- detect_path_shortening(nstf_df_list$functions_no_tests)
-      if (short_is_needed) {
-        nstf_df_list$functions_no_tests <- create_function_locations_df(nstf_df_list$functions_no_tests)
+      if (isTRUE(short_is_needed)) {
+        located <- create_function_locations_df(nstf_df_list$functions_no_tests)
+        if (!is.null(located)) nstf_df_list$functions_no_tests <- located
       }
     }
     if ("tests_skipped" %in% nstf_elements$present && length(test_results$tests_skipped) > 0) {
       nstf_df_list$tests_skipped_df <- convert_vectors_to_df(test_results, "tests_skipped")[[1]]
       short_is_needed <- detect_path_shortening(nstf_df_list$tests_skipped_df, "file")
-      if (short_is_needed) {
+      if (isTRUE(short_is_needed)) {
         nstf_df_list$tests_skipped_df$file <- sapply(nstf_df_list$tests_skipped_df$file, extract_short_path)
       }
     }
@@ -97,13 +98,48 @@ generate_test_report <- function(test_results, output_dir = NULL) {
       stf_df_list$tests_skip_df <- create_test_skip_details(test_results$test_skip)
     }
     
+    # Skipped tests recorded as entries (file/test/reason) come from the
+    # standard framework (testthat), so list them under the standard
+    # "Tests Skipped" panel instead of the non-standard (NSTF) one.
+    is_standard_fw <- grepl("^standard", as.character(test_results$test_framework_type)[1]) ||
+      "long_summary" %in% stf_elements$present
+    skipped_df <- nstf_df_list$tests_skipped_df
+    if (isTRUE(is_standard_fw) && is.data.frame(skipped_df) &&
+        all(c("file", "test") %in% names(skipped_df))) {
+      report_env$tests_skipped_stf_df <- skipped_df
+      nstf_df_list$tests_skipped_df <- NULL
+    } else {
+      report_env$tests_skipped_stf_df <- NULL
+    }
+    
     report_env$functions_no_tests <- nstf_df_list$functions_no_tests
     report_env$tests_skipped_df <- nstf_df_list$tests_skipped_df
     report_env$tests_passing_df <- nstf_df_list$tests_passing_df
     report_env$tests_skip_df <- stf_df_list$tests_skip_df
     report_env$long_summary_df <- stf_df_list$long_summary_df
-    report_env$has_stf <- !stf_none
-    report_env$has_nstf <- !nstf_none
+    # Decide which sections to show from content, not mere presence of a
+    # field: a standard-framework run with all tests passing can carry
+    # `tests_skipped` while having nothing for the non-standard panels.
+    has_df_rows <- function(x) is.data.frame(x) && nrow(x) > 0
+    nstf_available <- c(
+      no      = has_df_rows(nstf_df_list$functions_no_tests),
+      skipped = has_df_rows(nstf_df_list$tests_skipped_df),
+      passing = has_df_rows(nstf_df_list$tests_passing_df)
+    )
+    stf_with_data <- has_df_rows(stf_df_list$long_summary_df) ||
+      has_df_rows(stf_df_list$tests_skip_df) ||
+      has_df_rows(report_env$tests_skipped_stf_df)
+    nstf_with_data <- any(nstf_available)
+    
+    if (stf_with_data || nstf_with_data) {
+      report_env$has_stf <- stf_with_data
+      report_env$has_nstf <- nstf_with_data
+    } else {
+      # nothing populated: keep the presence-based flags (empty-state messages)
+      report_env$has_stf <- !stf_none
+      report_env$has_nstf <- !nstf_none
+    }
+    report_env$nstf_available <- nstf_available
   } else {
     # Multi-framework: build framework_results
     res_list <- test_results$results
@@ -136,15 +172,16 @@ generate_test_report <- function(test_results, output_dir = NULL) {
         if (!is.null(r$functions_no_tests) && is.data.frame(r$functions_no_tests) && nrow(r$functions_no_tests) > 0) {
           fn <- r$functions_no_tests
           short_is_needed <- tryCatch(detect_path_shortening(fn), error = function(e) FALSE)
-          if (short_is_needed) {
-            fn <- tryCatch(create_function_locations_df(fn), error = function(e) r$functions_no_tests)
+          if (isTRUE(short_is_needed)) {
+            located <- tryCatch(create_function_locations_df(fn), error = function(e) NULL)
+            if (!is.null(located)) fn <- located
           }
           out$functions_no_tests <- fn
         }
         if (!is.null(r$tests_skipped) && length(r$tests_skipped) > 0) {
           df <- convert_vectors_to_df(list(tests_skipped = r$tests_skipped), "tests_skipped")[[1]]
           short_is_needed <- detect_path_shortening(df, "file")
-          if (short_is_needed) df$file <- sapply(df$file, extract_short_path)
+          if (isTRUE(short_is_needed)) df$file <- sapply(df$file, extract_short_path)
           out$tests_skipped_df <- df
         }
         if (!is.null(r$tests_passing) && length(r$tests_passing) > 0) {
@@ -349,7 +386,7 @@ generate_test_details <- function(assessment_results, framework_id = NULL) {
       as.numeric(assessment_results$results[["covr"]]),
       error = function(e) NA_real_
     )
-    total_cov <- if (!is.na(fallback)) fallback else NA_real_
+    total_cov <- if (length(fallback) == 1L && !is.na(fallback)) fallback else NA_real_
   }
   total_cov <- round(total_cov, 2)
   
@@ -641,13 +678,17 @@ convert_test_entries_to_df <- function(entries) {
 #'
 #' @param df - input data
 #'
+#' @return A data frame, or `NULL` (with a message) if required columns are missing.
+#'
 #' @keywords internal
+#' @noRd
 create_long_summary_details <- function(df) {
   
   # validate input
   required <- c("file", "code_script", "status")
   if (!all(required %in% names(df))) {
-    stop("Input df must contain columns: file, code_script, status")
+    message("Input df must contain columns: file, code_script, status")
+    return(NULL)
   }
   
   file_orig <- as.character(df$file)
@@ -690,12 +731,16 @@ create_long_summary_details <- function(df) {
 #'
 #' @param df - input data
 #'
+#' @return A data frame, or `NULL` (with a message) if required columns are missing.
+#'
 #' @keywords internal
+#' @noRd
 create_test_skip_details <- function(df) {
   # validate input
   required <- c("file", "code_script", "status", "expectation", "line1")
   if (!all(required %in% names(df))) {
-    stop("Input df must contain columns: file, code_script, status, expectation, line1")
+    message("Input df must contain columns: file, code_script, status, expectation, line1")
+    return(NULL)
   }
   
   file_orig    <- as.character(df$file)
@@ -742,7 +787,8 @@ create_test_skip_details <- function(df) {
 #'
 #' @return A `data.frame` with columns:
 #'   `file` (character), `function_name` (character),
-#'   `start_line` (integer), `end_line` (integer).
+#'   `start_line` (integer), `end_line` (integer); or `NULL` (with a message)
+#'   if `df` is not a data frame or required columns are missing.
 #'
 #' @keywords internal
 #' @noRd
@@ -752,7 +798,8 @@ create_function_locations_df <- function(
     extract_short_path = base::basename
 ) {
   if (!is.data.frame(df)) {
-    stop("`df` must be a data.frame (or tibble).", call. = FALSE)
+    message("`df` must be a data.frame (or tibble).")
+    return(NULL)
   }
   
   # --- Resolve required columns (allow a few common variants) ---
@@ -776,12 +823,12 @@ create_function_locations_df <- function(
       if (!is.na(col_end_line))     "end_line")
   )
   if (length(missing_core)) {
-    stop(
+    message(
       "Missing required column(s): ",
       paste(missing_core, collapse = ", "),
-      ". Expected columns include: function_name, start_line, end_line.",
-      call. = FALSE
+      ". Expected columns include: function_name, start_line, end_line."
     )
+    return(NULL)
   }
   
   function_name <- df[[col_function_name]]
@@ -877,7 +924,8 @@ create_function_locations_df <- function(
 #' @param min_dir_share Minimum fraction of entries that must contain a directory
 #'   separator to treat them as true paths (default: 0.2).
 #'
-#' @return TRUE if shortening is advisable; otherwise FALSE.
+#' @return TRUE if shortening is advisable; otherwise FALSE. `NA` (with a
+#'   message) if `df` is not a data frame or the path column is not found.
 #'
 #' @examples
 #' \dontrun{
@@ -901,7 +949,8 @@ detect_path_shortening <- function(
     min_dir_share = 0.2
 ) {
   if (!is.data.frame(df)) {
-    stop("`df` must be a data.frame.", call. = FALSE)
+    message("`df` must be a data.frame.")
+    return(NA)
   }
   
   # Resolve the path column: accept a single name or a vector of candidates
@@ -928,11 +977,11 @@ detect_path_shortening <- function(
   
   col <- resolve_col(df, file_col)
   if (is.na(col)) {
-    stop(
+    message(
       "Could not find any of the specified path columns in `df`. Looked for: ",
-      paste(file_col, collapse = ", "),
-      call. = FALSE
+      paste(file_col, collapse = ", ")
     )
+    return(NA)
   }
   
   paths <- df[[col]]
