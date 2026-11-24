@@ -3504,3 +3504,85 @@ test_that("the first source file (alphabetically) to define a duplicated export 
   expect_equal(res$test_file[res$source_file == "first.R"], "test-dup.R")
   expect_true(is.na(res$test_file[res$source_file == "second.R"]))
 })
+
+# ---- testit helper support ----
+
+make_testit_pkg <- function() {
+  root <- tempfile("testitpkg")
+  test_dir <- file.path(root, "tests", "testit")
+  dir.create(test_dir, recursive = TRUE)
+  dir.create(file.path(root, "tests", "helpers"))
+  writeLines("Package: tipkg\nVersion: 0.1", file.path(root, "DESCRIPTION"))
+  writeLines("helper_val <- 42", file.path(test_dir, "helper-a.R"))
+  writeLines("shared_val <- 7", file.path(root, "tests", "helpers", "shared.R"))
+  writeLines("stopifnot(helper_val == 42, shared_val == 7)", file.path(test_dir, "test-a.R"))
+  root
+}
+
+test_that("source_testit_helpers sources helper*.R and helpers/*.R, ignores other files", {
+  root <- make_testit_pkg()
+  withr::defer(unlink(root, recursive = TRUE, force = TRUE))
+  test_dir <- file.path(root, "tests", "testit")
+  env <- new.env()
+  
+  res <- source_testit_helpers(env, test_dir)
+  
+  expect_length(res, 2)
+  expect_equal(get("helper_val", envir = env), 42)
+  expect_equal(get("shared_val", envir = env), 7)
+  expect_false(exists("test_a", envir = env, inherits = FALSE))
+})
+
+test_that("source_testit_helpers returns empty vector when no helpers or dirs exist", {
+  root <- tempfile("nohelp")
+  dir.create(root)
+  withr::defer(unlink(root, recursive = TRUE, force = TRUE))
+  
+  res <- source_testit_helpers(new.env(), file.path(root, "tests", "testit"))
+  
+  expect_identical(res, character(0))
+})
+
+test_that("source_testit_helpers messages and skips a failing helper", {
+  root <- make_testit_pkg()
+  withr::defer(unlink(root, recursive = TRUE, force = TRUE))
+  test_dir <- file.path(root, "tests", "testit")
+  writeLines("stop('boom')", file.path(test_dir, "helper-bad.R"))
+  env <- new.env()
+  
+  expect_message(res <- source_testit_helpers(env, test_dir), "Failed to source testit helper file")
+  expect_length(res, 2)
+})
+
+test_that("check_covr_skip_testit exposes helpers to tests and does not run helpers as tests", {
+  root <- make_testit_pkg()
+  withr::defer(unlink(root, recursive = TRUE, force = TRUE))
+  test_dir <- file.path(root, "tests", "testit")
+  mapping <- data.frame(
+    source_file = c("a.R", "b.R"),
+    test_file = c("test-a.R", "helper-a.R"),
+    stringsAsFactors = FALSE
+  )
+  
+  res <- check_covr_skip_testit("tipkg", mapping, test_dir)
+  
+  expect_equal(res$issue_type, "No tests skipped")
+  
+  # without helpers the test fails: confirms helper visibility is what makes it pass
+  writeLines("stopifnot(missing_obj == 1)", file.path(test_dir, "test-b.R"))
+  mapping2 <- data.frame(source_file = "b.R", test_file = "test-b.R", stringsAsFactors = FALSE)
+  res2 <- check_covr_skip_testit("tipkg", mapping2, test_dir)
+  expect_match(res2$issue_type, "^error:")
+})
+
+test_that("check_covr_skip_testit uses the package namespace as parent when loaded", {
+  root <- make_testit_pkg()
+  withr::defer(unlink(root, recursive = TRUE, force = TRUE))
+  test_dir <- file.path(root, "tests", "testit")
+  writeLines("stopifnot(is.function(check_covr_skip_testit))", file.path(test_dir, "test-ns.R"))
+  mapping <- data.frame(source_file = "n.R", test_file = "test-ns.R", stringsAsFactors = FALSE)
+  
+  res <- check_covr_skip_testit("test.assessr", mapping, test_dir)
+  
+  expect_equal(res$issue_type, "No tests skipped")
+})
