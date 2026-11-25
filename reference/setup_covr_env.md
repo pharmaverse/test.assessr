@@ -70,6 +70,10 @@ A named list with components:
   Character vector of helper files successfully sourced into
   \`cov_env\`.
 
+- setup_error:
+
+  \`NULL\`, or the error message if setup failed.
+
 ## Details
 
 The setup process:

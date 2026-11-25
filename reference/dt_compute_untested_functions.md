@@ -4,7 +4,7 @@ Identifies package functions that were not executed by the provided
 coverage object. A function is considered *untested* if **no** line
 within its `srcref` span (from `start_line` to `end_line`) has a
 positive execution count in
-[`covr::tally_coverage()`](http://covr.r-lib.org/reference/tally_coverage.md).
+[`covr::tally_coverage()`](https://covr.r-lib.org/reference/tally_coverage.html).
 
 ## Usage
 
@@ -22,11 +22,11 @@ dt_compute_untested_functions(pkg_name, coverage)
 - coverage:
 
   A coverage object as returned by `covr` (e.g.,
-  [`covr::environment_coverage()`](http://covr.r-lib.org/reference/environment_coverage.md)
+  [`covr::environment_coverage()`](https://covr.r-lib.org/reference/environment_coverage.html)
   or
-  [`covr::package_coverage()`](http://covr.r-lib.org/reference/package_coverage.md)),
+  [`covr::package_coverage()`](https://covr.r-lib.org/reference/package_coverage.html)),
   consumable by
-  [`covr::tally_coverage()`](http://covr.r-lib.org/reference/tally_coverage.md).
+  [`covr::tally_coverage()`](https://covr.r-lib.org/reference/tally_coverage.html).
 
 ## Value
 
@@ -66,4 +66,4 @@ least one executed line within their span.
 
 ## See also
 
-[`tally_coverage`](http://covr.r-lib.org/reference/tally_coverage.md)
+[`tally_coverage`](https://covr.r-lib.org/reference/tally_coverage.html)

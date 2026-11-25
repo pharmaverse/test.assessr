@@ -6,7 +6,7 @@ and applies context fixes to ensure each test has a valid context.
 ## Usage
 
 ``` r
-create_test_reporter(test_path, pkg, cov_env)
+create_test_reporter(test_path, pkg, cov_env = NULL)
 ```
 
 ## Arguments
@@ -21,7 +21,8 @@ create_test_reporter(test_path, pkg, cov_env)
 
 - cov_env:
 
-  environment covr environment.
+  Optional environment; receives \`stf_error\` on failure. Not the test
+  environment.
 
 ## Value
 

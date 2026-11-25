@@ -11,7 +11,7 @@ steps:
 
 - run [`callr::r_safe`](https://callr.r-lib.org/reference/r.html) which
   calls
-  [`covr::package_coverage`](http://covr.r-lib.org/reference/package_coverage.md).
+  [`covr::package_coverage`](https://covr.r-lib.org/reference/package_coverage.html).
 
 - The `r_safe` function has the parameter `error = "error"`.
 
@@ -69,7 +69,7 @@ steps:
 - comment out tests to be skipped
 
 - run
-  [`covr::environment_coverage`](http://covr.r-lib.org/reference/environment_coverage.md)
+  [`covr::environment_coverage`](https://covr.r-lib.org/reference/environment_coverage.html)
   on remaining test files.
 
 - If `Step 2` is successful, then a unit test data coverage object like
@@ -121,9 +121,9 @@ tells the user why they were skipped.
 - run
   [`withr::with_dir`](https://withr.r-lib.org/reference/with_dir.html)
   which calls
-  [`covr::package_coverage`](http://covr.r-lib.org/reference/package_coverage.md).
+  [`covr::package_coverage`](https://covr.r-lib.org/reference/package_coverage.html).
 
-- [`covr::package_coverage`](http://covr.r-lib.org/reference/package_coverage.md)
+- [`covr::package_coverage`](https://covr.r-lib.org/reference/package_coverage.html)
   has the parameters `type = "tests", quiet = TRUE`
 
 - If `Step 3` is successful, then a unit test data coverage object like

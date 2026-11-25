@@ -94,8 +94,8 @@ detection; it only applies the skip mappings supplied in \`test_skip\`.
 ## See also
 
 [`test_dir`](https://testthat.r-lib.org/reference/test_dir.html),
-[`package_coverage`](http://covr.r-lib.org/reference/package_coverage.md),
-[`environment_coverage`](http://covr.r-lib.org/reference/environment_coverage.md)
+[`package_coverage`](https://covr.r-lib.org/reference/package_coverage.html),
+[`environment_coverage`](https://covr.r-lib.org/reference/environment_coverage.html)
 
 Other stf_utility: [`map_test()`](map_test.md),
 [`map_tests_stf()`](map_tests_stf.md), [`nest_test()`](nest_test.md),

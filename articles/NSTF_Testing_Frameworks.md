@@ -39,7 +39,7 @@ Bioconductor **RUnit** framework
 
 - Exposes namespace objects + datasets to a dedicated environment and
   runs coverage with
-  [`covr::environment_coverage()`](http://covr.r-lib.org/reference/environment_coverage.md).
+  [`covr::environment_coverage()`](https://covr.r-lib.org/reference/environment_coverage.html).
 
 - If `BiocGeneric workflow` is successful, then a unit test data
   coverage object like this is produced:

@@ -70,8 +70,7 @@ Intended for \*\*source-tree\*\* coverage of tinytest suites:
   [`tinytest::run_test_dir()`](https://rdrr.io/pkg/tinytest/man/run_test_dir.html)
   from `file.path(pkg_source_path, "inst", "tinytest")`.
 
-- Coverage is built from covr's counters using
-  [`covr::as_coverage()`](http://covr.r-lib.org/reference/as_coverage.md).
+- Coverage is built from covr's counters using `covr::as_coverage()`.
 
 **Preconditions**
 

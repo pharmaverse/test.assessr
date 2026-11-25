@@ -1,12 +1,12 @@
 # Create Fail Reporter
 
-Executes all tests in a given directory using \`testthat::test_dir()\`
-and applies context fixes to ensure each test has a valid context.
+Runs all tests in a directory with \`testthat::FailReporter\` to detect
+failing tests and report setup or helper errors.
 
 ## Usage
 
 ``` r
-create_fail_reporter(test_path, pkg, cov_env)
+create_fail_reporter(test_path, pkg, cov_env = NULL)
 ```
 
 ## Arguments
@@ -21,9 +21,8 @@ create_fail_reporter(test_path, pkg, cov_env)
 
 - cov_env:
 
-  environment convr environment.
+  Optional environment; not used as the test environment.
 
 ## Value
 
-A list of test results with corrected contexts, or \`NULL\` if an error
-occurs.
+A list with \`failed\` (logical) and \`error\` (character or \`NULL\`).
