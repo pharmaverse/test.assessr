@@ -1106,3 +1106,106 @@ test_that("compute_test_files_clean_dt: empty skip_tests vector does not filter"
   )
   expect_identical(out, expected)
 })
+
+
+# --- data.table >= 1.18 support: bz2 test file and subdirectory mirroring ---
+
+make_dt_fixture <- function(raw_name, with_subdir = TRUE) {
+  root <- file.path(tempfile("dtpkg"), "data.table")
+  inst_tests <- file.path(root, "inst", "tests")
+  dir.create(inst_tests, recursive = TRUE)
+  dir.create(file.path(root, "tests"), recursive = TRUE)
+  writeLines("x", file.path(inst_tests, raw_name))
+  writeLines("y", file.path(inst_tests, "other.Rraw"))
+  if (with_subdir) {
+    dir.create(file.path(inst_tests, "csvy"))
+    writeLines("z", file.path(inst_tests, "csvy", "test.csvy"))
+  }
+  return(root)
+}
+
+test_that("data.table MIRROR: copies tests.Rraw.bz2 and subdirectories, teardown removes them", {
+  root <- make_dt_fixture("tests.Rraw.bz2")
+  on.exit(unlink(dirname(root), recursive = TRUE), add = TRUE)
+  
+  res <- prepare_tests_for_package_dt("data.table", root, character(0), mode = "mirror")
+  
+  expect_true(file.exists(file.path(root, "tests", "tests.Rraw.bz2")))
+  expect_true(file.exists(file.path(root, "tests", "other.Rraw")))
+  expect_true(file.exists(file.path(root, "tests", "csvy", "test.csvy")))
+  
+  res$teardown()
+  expect_false(file.exists(file.path(root, "tests", "tests.Rraw.bz2")))
+  expect_false(dir.exists(file.path(root, "tests", "csvy")))
+})
+
+test_that("data.table MIRROR: uncompressed tests.Rraw (1.17.0 layout) still mirrors files", {
+  root <- make_dt_fixture("tests.Rraw", with_subdir = FALSE)
+  on.exit(unlink(dirname(root), recursive = TRUE), add = TRUE)
+  
+  res <- prepare_tests_for_package_dt("data.table", root, character(0), mode = "mirror")
+  
+  expect_true(file.exists(file.path(root, "tests", "tests.Rraw")))
+  expect_true(file.exists(file.path(root, "tests", "other.Rraw")))
+  res$teardown()
+  expect_false(file.exists(file.path(root, "tests", "tests.Rraw")))
+})
+
+test_that("data.table MIRROR: skipped when tests/ already has tests.Rraw.bz2", {
+  root <- make_dt_fixture("tests.Rraw.bz2")
+  on.exit(unlink(dirname(root), recursive = TRUE), add = TRUE)
+  writeLines("x", file.path(root, "tests", "tests.Rraw.bz2"))
+  
+  res <- prepare_tests_for_package_dt("data.table", root, character(0), mode = "mirror")
+  
+  expect_false(file.exists(file.path(root, "tests", "other.Rraw")))
+  expect_false(dir.exists(file.path(root, "tests", "csvy")))
+  res$teardown()
+  expect_true(file.exists(file.path(root, "tests", "tests.Rraw.bz2")))
+})
+
+test_that("data.table MIRROR: failed subdirectory copy is not recorded and does not error", {
+  root <- make_dt_fixture("tests.Rraw.bz2")
+  on.exit(unlink(dirname(root), recursive = TRUE), add = TRUE)
+  
+  real_copy <- file.copy
+  mockery::stub(prepare_tests_for_package_dt, "file.copy", function(from, to, overwrite = FALSE, recursive = FALSE) {
+    if (isTRUE(recursive)) stop("copy failed")
+    real_copy(from, to, overwrite = overwrite)
+  })
+  
+  res <- prepare_tests_for_package_dt("data.table", root, character(0), mode = "mirror")
+  expect_false(dir.exists(file.path(root, "tests", "csvy")))
+  expect_true(file.exists(file.path(root, "tests", "tests.Rraw.bz2")))
+  res$teardown()
+})
+
+test_that("data.table MIRROR: unsupported mode is rejected by match.arg", {
+  expect_error(prepare_tests_for_package_dt("data.table", "mockpkg", character(0), mode = "other"))
+})
+
+test_that("get_pkg_name returns an unnamed value so identical() works (stringr >= 1.6.0)", {
+  path <- "C:/Users/x/temp_file_57e83ee254dd/data.table"
+  got <- get_pkg_name(path)
+  expect_null(names(got))
+  expect_identical(got, "data.table")
+  
+  got_tar <- get_pkg_name("data.table_1.18.6.1.tar.gz")
+  expect_null(names(got_tar))
+  expect_identical(got_tar, "data.table")
+})
+
+test_that("data.table branch is taken when pkg_name comes from get_pkg_name on a full path", {
+  root <- make_dt_fixture("tests.Rraw.bz2", with_subdir = FALSE)
+  on.exit(unlink(dirname(root), recursive = TRUE), add = TRUE)
+  writeLines("test.data.table()", file.path(root, "tests", "main.R"))
+  
+  got <- compute_test_files_clean_dt(
+    pkg_name = get_pkg_name(root),
+    pkg_source_path = root,
+    clean_mapping = NULL,
+    test_pkg_data = list(),
+    skip_tests = NULL
+  )
+  expect_identical(basename(got), "main.R")
+})

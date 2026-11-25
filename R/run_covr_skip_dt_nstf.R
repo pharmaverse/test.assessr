@@ -76,10 +76,37 @@ run_covr_skip_dt_nstf <- function(pkg_source_path,
   
   # 4) Run coverage on the resolved tests
   message(sprintf("running coverage manually for %s", pkg_name))
+  # data.table's test runner calls stop() in two known-benign cases on Windows:
+  #   1. test 1997.19: OMP_THREAD_LIMIT is set in the shell; data.table's C
+  #      setDTthreads() reads it via getenv() which bypasses R's env table.
+  #   2. "Tests succeeded, but non-test code caused warnings": a dependency
+  #      (e.g. bit64) was built under a slightly different R patch version and
+  #      emits a package-version warning outside any test() call.
+  # Both leave all tests executed and coverage accumulated. We suppress only
+  # these two patterns; every other error re-throws.
+  omp_wrapper <- tempfile(pattern = "dt_omp_wrapper_", fileext = ".R")
+  writeLines(c(
+    "tryCatch(",
+    "  test.data.table(),",
+    "  error = function(e) {",
+    "    msg <- conditionMessage(e)",
+    '    if (grepl("1997[.]19", msg, perl = TRUE)) {',
+    '      message("Suppressed OMP_THREAD_LIMIT test failure (test 1997.19): ", msg)',
+    "      invisible(NULL)",
+    '    } else if (grepl("Tests succeeded, but non-test code caused warnings", msg, fixed = TRUE)) {',
+    '      message("Suppressed non-test warning noise (tests passed): ", msg)',
+    "      invisible(NULL)",
+    "    } else stop(e)",
+    "  }",
+    ")"
+  ), omp_wrapper)
+  on.exit(try(unlink(omp_wrapper), silent = TRUE), add = TRUE)
+  dt_test_files <- normalizePath(omp_wrapper, winslash = "/", mustWork = FALSE)
+  
   coverage <- tryCatch({
     covr::environment_coverage(
       env        = cov_env,
-      test_files = test_files_clean
+      test_files = dt_test_files
     )
   }, error = function(e) {
     return(cleanup_and_return_null(
@@ -298,9 +325,9 @@ dt_compute_untested_functions <- function(pkg_name, coverage) {
 #'
 #' @keywords internal
 prepare_tests_for_package_dt <- function(pkg_name,
-                                      pkg_source_path,
-                                      test_files,
-                                      mode = c("mirror")) {
+                                         pkg_source_path,
+                                         test_files,
+                                         mode = c("mirror")) {
   mode <- match.arg(mode)
   teardown <- function() {}
   tests_to_run <- test_files
@@ -314,16 +341,21 @@ prepare_tests_for_package_dt <- function(pkg_name,
     
     created <- character(0)
     
-    # If tests/tests.Rraw is missing but inst/tests/tests.Rraw exists,
-    # mirror top-level files from inst/tests -> tests (non-recursive).
-    if (!file.exists(raw_in_tests) && file.exists(raw_in_inst)) {
+    # data.table >= 1.18 tarballs ship inst/tests/tests.Rraw.bz2 only
+    has_raw_in_tests <- file.exists(raw_in_tests) || file.exists(paste0(raw_in_tests, ".bz2"))
+    has_raw_in_inst <- file.exists(raw_in_inst) || file.exists(paste0(raw_in_inst, ".bz2"))
+    
+    # If tests/tests.Rraw(.bz2) is missing but inst/tests/tests.Rraw(.bz2) exists,
+    # mirror files and subdirectories from inst/tests -> tests.
+    if (!has_raw_in_tests && has_raw_in_inst) {
       if (mode == "mirror") {
         message("data.table: MIRROR mode -> copying inst/tests/* -> tests/ to satisfy test.data.table()")
         dir.create(tests_dir, showWarnings = FALSE, recursive = TRUE)
         inst_files <- list.files(inst_tests_dir, all.files = FALSE, full.names = TRUE, no.. = TRUE)
         
         finfo <- file.info(inst_files)
-        inst_files <- inst_files[!is.na(finfo$isdir) & !finfo$isdir]  # files only, top-level
+        inst_dirs <- inst_files[!is.na(finfo$isdir) & finfo$isdir]
+        inst_files <- inst_files[!is.na(finfo$isdir) & !finfo$isdir]  # top-level files
         
         for (src in inst_files) {
           dest <- file.path(tests_dir, basename(src))
@@ -334,6 +366,23 @@ prepare_tests_for_package_dt <- function(pkg_name,
             }
           }
         }
+        
+        # Subdirectories (e.g. csvy/) are copied recursively when absent
+        copied_dirs <- lapply(inst_dirs, function(src) {
+          dest <- file.path(tests_dir, basename(src))
+          out <- NULL
+          if (!file.exists(dest)) {
+            ok <- tryCatch(
+              file.copy(src, tests_dir, overwrite = FALSE, recursive = TRUE),
+              error = function(condition) FALSE
+            )
+            if (isTRUE(ok)) {
+              out <- normalizePath(dest, winslash = "/", mustWork = FALSE)
+            }
+          }
+          return(out)
+        })
+        created <- c(created, unlist(copied_dirs))
       } else {
         message("data.table: MIRROR disabled; tests/tests.Rraw missing. Full suite may fail.")
       }
@@ -353,12 +402,12 @@ prepare_tests_for_package_dt <- function(pkg_name,
     # Teardown: remove only what we created via MIRROR
     teardown <- function() {
       if (length(created)) {
-        try(unlink(created, force = TRUE), silent = TRUE)
+        try(unlink(created, recursive = TRUE, force = TRUE), silent = TRUE)
       }
     }
   }
   
-  list(test_files = tests_to_run, teardown = teardown)
+  return(list(test_files = tests_to_run, teardown = teardown))
 }
 
 
@@ -397,10 +446,10 @@ prepare_tests_for_package_dt <- function(pkg_name,
 #'
 #' @keywords internal
 compute_test_files_clean_dt <- function(pkg_name,
-                                     pkg_source_path,
-                                     clean_mapping,
-                                     test_pkg_data,
-                                     skip_tests = NULL) {
+                                        pkg_source_path,
+                                        clean_mapping,
+                                        test_pkg_data,
+                                        skip_tests = NULL) {
   if (identical(pkg_name, "data.table")) {
     tests_dir <- file.path(pkg_source_path, "tests")
     main      <- file.path(tests_dir, "main.R")
