@@ -495,6 +495,7 @@ run_covr_modes <- function(pkg_source_path,
 #'   `cov_env` before setup.}
 #'   \item{helpers_loaded}{Character vector of helper files successfully
 #'   sourced into `cov_env`.}
+#'   \item{setup_error}{`NULL`, or the error message if setup failed.}
 #' }
 #'
 #' @details
@@ -528,6 +529,7 @@ setup_covr_env <- function(pkg_source_path,
   base_r_exports_loaded <- character()
   root_dir <- NULL
   helpers_loaded <- character()
+  setup_error <- NULL
   
   # Record initial state before setup
   initial_state <- ls(envir = cov_env, all.names = TRUE)
@@ -661,6 +663,7 @@ setup_covr_env <- function(pkg_source_path,
     safe_unload_package(pkg_name)
     
   }, error = function(e) {
+    setup_error <<- e$message
     cleanup_and_return_null(
       paste0("Error during setup for ", pkg_name, " : ", e$message),
       env = cov_env
@@ -674,7 +677,8 @@ setup_covr_env <- function(pkg_source_path,
     base_r_exports_loaded = base_r_exports_loaded,
     root_dir = root_dir,
     initial_state = initial_state,
-    helpers_loaded = helpers_loaded
+    helpers_loaded = helpers_loaded,
+    setup_error = setup_error
   ))
 }
 

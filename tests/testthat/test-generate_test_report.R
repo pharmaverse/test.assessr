@@ -292,6 +292,24 @@ test_that("generate_test_report creates an HTML report", {
   
 })
 
+test_that("generate_test_report disables mathjax to avoid pandoc deprecation warning", {
+  testthat::skip_if_not_installed("mockery")
+  tmp_dir <- withr::local_tempdir()
+  withr::local_envvar(NOT_CRAN = "true")
+  
+  captured <- NULL
+  mockery::stub(generate_test_report, "rmarkdown::render", function(...) {
+    captured <<- list(...)
+    invisible(NULL)
+  })
+  
+  generate_test_report(toy_assessment_results, tmp_dir)
+  
+  expect_true("output_options" %in% names(captured))
+  expect_true("mathjax" %in% names(captured$output_options))
+  expect_null(captured$output_options$mathjax)
+})
+
 test_that("generate_test_report accepts multi-framework input", {
   skip_on_cran()
   testthat::skip_if_not_installed("rmarkdown")
@@ -603,6 +621,37 @@ test_that("convert_vectors_to_df handles list with additional names without affe
   # For list element, data.frame(file = x[[nm]]) will create a list-column; ensure it exists
   expect_true("foo" %in% names(res$inner_list))
   expect_equal(nrow(res$inner_list), length(x$inner_list))
+})
+
+make_skipped_entries <- function() {
+  skip_result <- structure(
+    list(message = "Reason: arrow is installed", test = "t2"),
+    class = c("expectation_skip", "expectation", "condition")
+  )
+  list(
+    list(file = "test-a.R", test = "t1", results = list(skip_result)),
+    list(file = "test-b.R", test = "t2", results = list())
+  )
+}
+
+test_that("convert_vectors_to_df flattens standard framework skipped entries", {
+  x <- list(tests_skipped = make_skipped_entries())
+  
+  res <- convert_vectors_to_df(x, "tests_skipped")
+  
+  expect_s3_class(res$tests_skipped, "data.frame")
+  expect_identical(res$tests_skipped$file, c("test-a.R", "test-b.R"))
+  expect_identical(res$tests_skipped$test, c("t1", "t2"))
+  expect_identical(res$tests_skipped$reason, c("arrow is installed", NA_character_))
+})
+
+test_that("convert_test_entries_to_df handles entries missing file and test", {
+  res <- convert_test_entries_to_df(list(list(results = list())))
+  
+  expect_identical(nrow(res), 1L)
+  expect_true(is.na(res$file))
+  expect_true(is.na(res$test))
+  expect_true(is.na(res$reason))
 })
 
 
@@ -1172,7 +1221,8 @@ test_that("errors on NULL output_dir with tolerant message match (no render spy)
 
 test_that("errors when required columns are missing", {
   df_bad <- data.frame(a = 1)
-  expect_error(create_long_summary_details(df_bad), "Input df must contain columns")
+  expect_message(res <- create_long_summary_details(df_bad), "Input df must contain columns")
+  expect_null(res)
 })
 
 test_that("parses file without '#' and returns NA start_line", {
@@ -1275,10 +1325,11 @@ test_that("stubbing grepl to FALSE simulates no '#' present and results in NA st
 
 test_that("errors when required columns are missing", {
   df_bad <- data.frame(a = 1)
-  expect_error(
-    create_test_skip_details(df_bad),
+  expect_message(
+    res <- create_test_skip_details(df_bad),
     "Input df must contain columns: file, code_script, status, expectation, line1"
   )
+  expect_null(res)
 })
 
 test_that("errors when only some required columns are present", {
@@ -1287,10 +1338,11 @@ test_that("errors when only some required columns are present", {
     code_script = "func",
     status = "SKIP"
   )
-  expect_error(
-    create_test_skip_details(df_partial),
+  expect_message(
+    res <- create_test_skip_details(df_partial),
     "Input df must contain columns: file, code_script, status, expectation, line1"
   )
+  expect_null(res)
 })
 
 test_that("processes valid dataframe with all required columns", {
@@ -1749,7 +1801,8 @@ testthat::test_that("errors on NULL output_dir and fail-fast prevents rendering 
 
 test_that("errors when required columns are missing", {
   df_bad <- data.frame(a = 1)
-  expect_error(create_long_summary_details(df_bad), "Input df must contain columns")
+  expect_message(res <- create_long_summary_details(df_bad), "Input df must contain columns")
+  expect_null(res)
 })
 
 test_that("parses file without '#' and returns NA start_line", {
@@ -1852,10 +1905,11 @@ test_that("stubbing grepl to FALSE simulates no '#' present and results in NA st
 
 test_that("errors when required columns are missing", {
   df_bad <- data.frame(a = 1)
-  expect_error(
-    create_test_skip_details(df_bad),
+  expect_message(
+    res <- create_test_skip_details(df_bad),
     "Input df must contain columns: file, code_script, status, expectation, line1"
   )
+  expect_null(res)
 })
 
 test_that("errors when only some required columns are present", {
@@ -1864,10 +1918,11 @@ test_that("errors when only some required columns are present", {
     code_script = "func",
     status = "SKIP"
   )
-  expect_error(
-    create_test_skip_details(df_partial),
+  expect_message(
+    res <- create_test_skip_details(df_partial),
     "Input df must contain columns: file, code_script, status, expectation, line1"
   )
+  expect_null(res)
 })
 
 test_that("processes valid dataframe with all required columns", {
@@ -2168,15 +2223,17 @@ test_that("stubbing as.character allows testing type coercion behavior", {
 .str_n <- function(n) paste(rep("x", n), collapse = "")
 
 test_that("errors if df is not a data.frame", {
-  expect_error(detect_path_shortening(1:3), "`df` must be a data.frame")
+  expect_message(res <- detect_path_shortening(1:3), "`df` must be a data.frame")
+  expect_true(is.na(res))
 })
 
 test_that("errors when requested column is not found", {
   df <- data.frame(other = "a", stringsAsFactors = FALSE)
-  expect_error(
-    detect_path_shortening(df, "file"),
+  expect_message(
+    res <- detect_path_shortening(df, "file"),
     "Could not find any of the specified path columns"
   )
+  expect_true(is.na(res))
 })
 
 test_that("auto-resolves the first present among c('file','source_file')", {
@@ -2445,10 +2502,11 @@ test_that("errors when required columns are missing", {
     stringsAsFactors = FALSE
   )
   
-  expect_error(
-    create_function_locations_df(df_in),
+  expect_message(
+    res <- create_function_locations_df(df_in),
     "Missing required column\\(s\\): .*function_name.*start_line.*end_line"
   )
+  expect_null(res)
 })
 
 test_that("handles NA and empty file elements gracefully", {
@@ -2530,4 +2588,224 @@ test_that("mockery::stub: attr() returns custom dimnames vector used as files", 
   )
   
   expect_equal(out$file, c("A.R", "B.R"))
+})
+
+test_that("standard-framework results with only skipped entries do not render empty NSTF panels", {
+  skip_on_cran()
+  skip_if_not_installed("kableExtra")
+  skip_if_not(rmarkdown::pandoc_available(), "pandoc not available")
+  tmp_dir <- withr::local_tempdir()
+  withr::local_envvar(NOT_CRAN = "true")
+  
+  res <- toy_assessment_results
+  res$test_framework_type <- "standard testing framework"
+  res$long_summary <- data.frame(
+    file = c("test-a.R#L1_L3", "test-b.R#L2_L4"),
+    code_script = c("fun_a", "fun_b"),
+    context = c("a", "b"),
+    status = c("PASS", "PASS"),
+    stringsAsFactors = FALSE
+  )
+  res$tests_skipped <- list(
+    list(file = "test-a.R", test = "skips on cran", skipped = 1,
+         results = list(structure(list(message = "not on cran"), class = c("expectation_skip", "expectation", "condition"))))
+  )
+  
+  out <- generate_test_report(res, tmp_dir)
+  html <- paste(readLines(out, warn = FALSE), collapse = "\n")
+  
+  expect_false(grepl("No data to display", html, fixed = TRUE))
+  expect_false(grepl("No passing tests", html, fixed = TRUE))
+  expect_false(grepl('<option value="no">', html, fixed = TRUE))
+  expect_false(grepl('<option value="passing">', html, fixed = TRUE))
+  # testthat skipped tests belong to the standard panel, not NSTF
+  expect_false(grepl("(NSTF)", html, fixed = TRUE))
+  expect_false(grepl("Non-Standard Test Type", html, fixed = TRUE))
+  expect_true(grepl("skips on cran", html, fixed = TRUE))
+  # panels stay in normal flow so overlapping wrappers cannot block DT paging buttons
+  expect_false(grepl("position:absolute; top:0; left:0; right:0", html, fixed = TRUE))
+})
+
+
+test_that("create_function_locations_df returns NULL with a message for non-data.frame input", {
+  expect_message(res <- create_function_locations_df(1:3), "must be a data.frame")
+  expect_null(res)
+})
+
+test_that("generate_test_report keeps original functions_no_tests when location rebuild returns NULL", {
+  skip_on_cran()
+  skip_if_not(rmarkdown::pandoc_available(), "pandoc not available")
+  tmp_dir <- withr::local_tempdir()
+  withr::local_envvar(NOT_CRAN = "true")
+  
+  res <- toy_assessment_results
+  res$functions_no_tests <- data.frame(
+    function_name = c("f1", "f2"),
+    file = c("/very/long/path/to/package/R/f1.R", "/very/long/path/to/package/R/f2.R"),
+    stringsAsFactors = FALSE
+  )
+  
+  # path shortening requested, but rebuild fails (missing start/end lines) -> message, no error
+  expect_message(
+    out <- generate_test_report(res, tmp_dir),
+    "Missing required column"
+  )
+  expect_true(file.exists(out))
+})
+
+test_that("generate_test_report does not fail when path detection returns NA", {
+  skip_on_cran()
+  skip_if_not(rmarkdown::pandoc_available(), "pandoc not available")
+  tmp_dir <- withr::local_tempdir()
+  withr::local_envvar(NOT_CRAN = "true")
+  
+  res <- toy_assessment_results
+  res$tests_skipped <- c("test-a.R", "test-b.R")
+  mockery::stub(generate_test_report, "detect_path_shortening", function(...) NA)
+  
+  out <- generate_test_report(res, tmp_dir)
+  expect_true(file.exists(out))
+})
+
+test_that("generate_test_report tolerates malformed long_summary and test_skip inputs", {
+  skip_on_cran()
+  skip_if_not(rmarkdown::pandoc_available(), "pandoc not available")
+  tmp_dir <- withr::local_tempdir()
+  withr::local_envvar(NOT_CRAN = "true")
+  
+  res <- toy_assessment_results
+  res$long_summary <- data.frame(a = 1)
+  res$test_skip <- data.frame(b = 1)
+  
+  suppressMessages(out <- generate_test_report(res, tmp_dir))
+  expect_true(file.exists(out))
+})
+
+# ---- coverage for helper branches and report guards -------------------------
+
+test_that("generate_test_report uses rebuilt function locations when available", {
+  withr::local_envvar(NOT_CRAN = "true")
+  tmp_dir <- withr::local_tempdir()
+  
+  res <- toy_assessment_results
+  res$functions_no_tests <- data.frame(
+    function_name = "f1", file = "/long/path/R/f1.R",
+    start_line = 1L, end_line = 3L, stringsAsFactors = FALSE
+  )
+  rebuilt <- data.frame(file = "f1.R", function_name = "f1",
+                        start_line = 1L, end_line = 3L, stringsAsFactors = FALSE)
+  
+  captured_env <- NULL
+  mockery::stub(generate_test_report, "detect_path_shortening", function(...) TRUE)
+  mockery::stub(generate_test_report, "create_function_locations_df", function(...) rebuilt)
+  mockery::stub(generate_test_report, "rmarkdown::render", function(..., envir) {
+    captured_env <<- envir
+    invisible(NULL)
+  })
+  
+  generate_test_report(res, tmp_dir)
+  
+  expect_identical(captured_env$functions_no_tests, rebuilt)
+})
+
+test_that("generate_test_report keeps original functions_no_tests when rebuild returns NULL", {
+  withr::local_envvar(NOT_CRAN = "true")
+  tmp_dir <- withr::local_tempdir()
+  
+  original <- data.frame(function_name = "f1", file = "/long/path/R/f1.R",
+                         stringsAsFactors = FALSE)
+  res <- toy_assessment_results
+  res$functions_no_tests <- original
+  
+  captured_env <- NULL
+  mockery::stub(generate_test_report, "detect_path_shortening", function(...) TRUE)
+  mockery::stub(generate_test_report, "create_function_locations_df", function(...) NULL)
+  mockery::stub(generate_test_report, "rmarkdown::render", function(..., envir) {
+    captured_env <<- envir
+    invisible(NULL)
+  })
+  
+  generate_test_report(res, tmp_dir)
+  
+  expect_identical(captured_env$functions_no_tests, original)
+})
+
+test_that("generate_test_report skips rendering with a message on CRAN / non-interactive", {
+  tmp_dir <- withr::local_tempdir()
+  withr::local_envvar(NOT_CRAN = "false")
+  mockery::stub(generate_test_report, "interactive", function() FALSE)
+  
+  expect_message(
+    out <- generate_test_report(toy_assessment_results, tmp_dir),
+    "Rendering skipped on CRAN or non-interactive environment."
+  )
+  expect_null(out)
+})
+
+test_that("handle_null collapses logical values", {
+  expect_equal(handle_null(TRUE), "TRUE")
+  expect_equal(handle_null(c(TRUE, FALSE)), "TRUE, FALSE")
+})
+
+test_that("safe_value passes non-numeric values through handle_null", {
+  expect_equal(safe_value("abc"), "abc")
+  expect_equal(safe_value(NULL), "N/A")
+  expect_equal(safe_value(TRUE), "TRUE")
+})
+
+test_that("generate_test_details falls back to results$covr when total_cov is not numeric", {
+  ar <- list(total_cov = NULL, results = list(covr = 0.75), test_framework_type = "standard testing framework")
+  out <- generate_test_details(ar)
+  expect_equal(out$Value[1], convert_number_to_percent(0.75))
+})
+
+test_that("generate_test_details yields NA coverage when fallback is missing or non-numeric", {
+  ar_none <- list(total_cov = NULL, results = NULL)
+  expect_s3_class(generate_test_details(ar_none), "data.frame")
+  
+  ar_bad <- list(total_cov = "n/a", results = list(covr = "abc"))
+  out <- suppressWarnings(generate_test_details(ar_bad))
+  expect_s3_class(out, "data.frame")
+  expect_equal(nrow(out), 8L)
+})
+
+test_that("create_file_coverage_df flattens NULL, data.frame and list errors", {
+  errors <- list(
+    NULL,
+    data.frame(a = 1, b = "x"),
+    list("e1", "e2"),
+    "plain"
+  )
+  out <- create_file_coverage_df(
+    file_names = c("a.R", "b.R", "c.R", "d.R"),
+    file_coverage = c(10, 20, 30, 40),
+    errors = errors,
+    notes = rep("n", 4)
+  )
+  expect_equal(nrow(out), 4L)
+  # errors are flattened into one string; each element type is represented
+  err <- out$Errors[1]
+  expect_match(err, "N/A", fixed = TRUE)   # NULL element
+  expect_match(err, "a b", fixed = TRUE)   # data.frame element
+  expect_match(err, "e1; e2", fixed = TRUE) # list element
+  expect_match(err, "plain", fixed = TRUE) # atomic element
+})
+
+test_that("convert_test_entries_to_df ignores non-list results when extracting reasons", {
+  entries <- list(
+    list(file = "test-a.R", test = "t1", results = list("plain string")),
+    list(file = "test-b.R", test = "t2", results = list(list(message = "Reason: not on cran")))
+  )
+  out <- convert_test_entries_to_df(entries)
+  expect_true(is.na(out$reason[1]))
+  expect_equal(out$reason[2], "not on cran")
+})
+
+test_that("detect_path_shortening returns NA with a message when no candidate column exists", {
+  df <- data.frame(x = "a/b/c", stringsAsFactors = FALSE)
+  expect_message(
+    res <- detect_path_shortening(df),
+    "Could not find any of the specified path columns"
+  )
+  expect_true(is.na(res))
 })

@@ -440,11 +440,21 @@ load_dependencies_into_env <- function(pkg_source_path, env) {
   depends_pkgs <- deps_df$package[deps_df$field %in% c("Depends", "Imports", "Suggests")]
   depends_pkgs <- unique(depends_pkgs)
   
+  # Base-priority packages go first and never overwrite existing bindings, so
+  # they cannot mask other packages (e.g. stats::filter over dplyr::filter).
+  base_pkgs <- c(
+    "stats", "utils", "methods", "graphics", "grDevices", "datasets", "tools"
+  )
+  depends_pkgs <- c(
+    depends_pkgs[depends_pkgs %in% base_pkgs],
+    depends_pkgs[!depends_pkgs %in% base_pkgs]
+  )
+  
   for (pkg in depends_pkgs) {
     # Ensure namespace is loaded (defensive)
     try(suppressWarnings(loadNamespace(pkg)), silent = TRUE)
     # Import all exports into env so code evaluated there can see them directly
-    import_namespace_exports(pkg, env, overwrite = TRUE)
+    import_namespace_exports(pkg, env, overwrite = !pkg %in% base_pkgs)
   }
   
   invisible(TRUE)
