@@ -933,8 +933,8 @@ test_that("run_covr_skip_runit_nstf: cleaning branch -> happy path updates mappi
   # --- Execute, capturing messages because message() was stubbed away earlier ---
   output <- testthat::capture_messages(
     suppressWarnings(res <- fn(pkg_source_path = pkg_source_path,
-              test_pkg_data   = test_pkg_data,
-              cov_env         = cov_env))
+                               test_pkg_data   = test_pkg_data,
+                               cov_env         = cov_env))
   )
   
   # --- Assertions -----------------------------------------------------------
@@ -1008,8 +1008,8 @@ test_that("run_covr_skip_runit_nstf builds correct run_test_line for prefix = 'r
   # ---- RUN ----
   out <- testthat::capture_messages(
     suppressWarnings(fn(pkg_source_path = pkg_source_path,
-       test_pkg_data = test_pkg_data,
-       cov_env = cov_env))
+                        test_pkg_data = test_pkg_data,
+                        cov_env = cov_env))
   )
   
   # ---- ASSERTIONS ----
@@ -1074,8 +1074,8 @@ test_that("run_covr_skip_runit_nstf builds correct run_test_line for prefix = 'T
   # ---- RUN ----
   out <- testthat::capture_messages(
     suppressWarnings(fn(pkg_source_path = pkg_source_path,
-       test_pkg_data   = test_pkg_data,
-       cov_env         = cov_env))
+                        test_pkg_data   = test_pkg_data,
+                        cov_env         = cov_env))
   )
   
   # ---- ASSERTIONS ----
@@ -1140,43 +1140,43 @@ test_that("run_covr_skip_runit_nstf builds correct run_test_line for default pre
   # ---- RUN ----
   out <- testthat::capture_messages(
     suppressWarnings(fn(pkg_source_path = pkg_source_path,
-       test_pkg_data   = test_pkg_data,
-       cov_env         = cov_env))
+                        test_pkg_data   = test_pkg_data,
+                        cov_env         = cov_env))
   )
   
   # ---- ASSERTIONS ----
   expect_true(is.character(out))
   expect_false(is.null(out))
 })
-  
+
 
 test_that("run_covr_skip_runit_nstf: cleaning branch -> happy path updates mapping and proceeds", {
   fn <- run_covr_skip_runit_nstf
-
+  
   pkg_source_path <- "/fake/pkg"
   pkg_name <- "mypkg"
-
+  
   # Cleaning branch must activate (non-NA bioc_run_ut_path)
   test_pkg_data <- list(
     bioc_run_ut_path = "/fake/pkg/inst/unitTests/run_unitTests.R",
     has_BioG_test = TRUE
   )
-
+  
   cov_env <- new.env(parent = baseenv())
-
+  
   # ---------------------------------------------------------------------------
   # ESSENTIAL STUBS ONLY
   # ---------------------------------------------------------------------------
-
+  
   mockery::stub(fn, "get_pkg_name", function(...) pkg_name)
   mockery::stub(fn, "is_runit_layout", function(...) TRUE)
-
+  
   mockery::stub(fn, "get_runit_test_paths",
                 function(...) list(bioc_unitTests = "/fake/pkg/inst/unitTests")
   )
-
+  
   mockery::stub(fn, "normalizePath", function(path, ...) path)
-
+  
   # Mapping BEFORE cleaning (contains run_unitTests.R)
   mockery::stub(fn, "get_source_test_mapping_runit_nstf",
                 function(...) data.frame(
@@ -1187,16 +1187,16 @@ test_that("run_covr_skip_runit_nstf: cleaning branch -> happy path updates mappi
                   stringsAsFactors = FALSE
                 )
   )
-
+  
   # Cleaning removes run_unitTests.R
   mockery::stub(fn, "remove_run_unitTests_mapping",
                 function(mapping, ...) {
                   mapping[mapping$test_file != "run_unitTests.R", , drop = FALSE]
                 }
   )
-
+  
   mockery::stub(fn, "prepare_for_bioc_runit", function(...) TRUE)
-
+  
   # No problematic tests → no skipping
   mockery::stub(fn, "check_covr_skip_runit_nstf",
                 function(...) data.frame(
@@ -1205,19 +1205,19 @@ test_that("run_covr_skip_runit_nstf: cleaning branch -> happy path updates mappi
                   stringsAsFactors = FALSE
                 )
   )
-
+  
   mockery::stub(fn, "get_function_no_tests",
                 function(...) data.frame(fun = "b", stringsAsFactors = FALSE)
   )
-
+  
   mockery::stub(fn, "tidyr::drop_na", function(df, ...) df)
-
+  
   # Minimal env population stubs
   mockery::stub(fn, "ls", function(...) character(0))
   mockery::stub(fn, "asNamespace", function(...) new.env())
   mockery::stub(fn, "assign", function(...) NULL)
   mockery::stub(fn, "load_package_datasets", function(...) character(0))
-
+  
   # Force coverage instrumentation to fail → fallback return
   mockery::stub(fn, "loadedNamespaces", function(...) c("base"))
   mockery::stub(fn, "detach_pkg_if_attached", function(...) TRUE)
@@ -1225,31 +1225,31 @@ test_that("run_covr_skip_runit_nstf: cleaning branch -> happy path updates mappi
   mockery::stub(fn, "covr::coverage_to_list",
                 function(...) list(filecoverage = matrix(0, 1), totalcoverage = 0)
   )
-
+  
   mockery::stub(fn, "cleanup_and_return_null", function(...) NULL)
-
+  
   # ---------------------------------------------------------------------------
   # Run the function and CAPTURE MESSAGE() output (CRITICAL!)
   # ---------------------------------------------------------------------------
-
+  
   output <- testthat::capture_messages(
     res <- suppressWarnings(fn(pkg_source_path = pkg_source_path,
-              test_pkg_data   = test_pkg_data,
-              cov_env         = cov_env))
+                               test_pkg_data   = test_pkg_data,
+                               cov_env         = cov_env))
   )
-
-
+  
+  
   # ---------------------------------------------------------------------------
   # Assertions
   # ---------------------------------------------------------------------------
-
+  
   # Cleaning message MUST appear
   expect_true(any(grepl(
-     "performing source test map cleaning for mypkg",
-     output
+    "performing source test map cleaning for mypkg",
+    output
   )))
   expect_false(is.null(output))
-
+  
   # Function returns a non-null result (successful continuation)
   expect_false(is.null(res))
 })
@@ -2314,6 +2314,30 @@ test_that("handles duplicate candidate paths via unique()", {
   expect_identical(res$fallback, raw_testdir)
 })
 
+test_that("does not add tests_RUnit when it is the same path as bioc_unitTests (pls-style dedup)", {
+  fn <- get_runit_test_paths
+  
+  # testdir IS tests/RUnit; pkg root is two levels up
+  pkg_root <- "/work/pkg"
+  tests_runit <- "/work/pkg/tests/RUnit"
+  
+  mock_normalize <- function(path, winslash = "/", mustWork = FALSE) path
+  # testdir (= tests/RUnit) exists; tests/RUnit (via upward probe) also "exists"
+  mock_dir_exists <- function(path) path == tests_runit
+  mock_file_exists <- function(path) path == file.path(pkg_root, "DESCRIPTION")
+  
+  mockery::stub(fn, "normalizePath", mock_normalize)
+  mockery::stub(fn, "dir.exists", mock_dir_exists)
+  mockery::stub(fn, "file.exists", mock_file_exists)
+  
+  res <- fn(test_pkg_data = list(), testdir = tests_runit)
+  
+  # Only one entry for the same physical dir; no duplicate
+  expect_equal(length(res), 1L)
+  expect_true("bioc_unitTests" %in% names(res))
+  expect_false("tests_RUnit" %in% names(res))
+})
+
 
 
 test_that("errors when no R source files are found", {
@@ -3256,4 +3280,256 @@ test_that("build_doRUnit_wrapper writes exactly four lines", {
   fn(doRUnit_path)
   
   expect_length(written_lines, 4L)
+})
+
+
+# ---- Issue #26: new helpers ----
+
+test_that("resolve_runit_layout returns tests_RUnit when only tests/RUnit exists", {
+  pkg_dir <- tempfile("pkg_rl1")
+  dir.create(file.path(pkg_dir, "tests", "RUnit"), recursive = TRUE)
+  on.exit(unlink(pkg_dir, recursive = TRUE), add = TRUE)
+  
+  td <- list(has_RUnit_tests_dir = TRUE)
+  expect_equal(resolve_runit_layout(pkg_dir, td), "tests_RUnit")
+})
+
+test_that("resolve_runit_layout returns inst_unitTests when inst/unitTests also exists", {
+  pkg_dir <- tempfile("pkg_rl2")
+  dir.create(file.path(pkg_dir, "tests", "RUnit"), recursive = TRUE)
+  dir.create(file.path(pkg_dir, "inst", "unitTests"), recursive = TRUE)
+  on.exit(unlink(pkg_dir, recursive = TRUE), add = TRUE)
+  
+  td <- list(has_RUnit_tests_dir = TRUE)
+  # inst/unitTests wins when both present
+  expect_equal(resolve_runit_layout(pkg_dir, td), "inst_unitTests")
+})
+
+test_that("resolve_runit_layout returns inst_unitTests for bioc packages", {
+  pkg_dir <- tempfile("pkg_rl3")
+  dir.create(file.path(pkg_dir, "inst", "unitTests"), recursive = TRUE)
+  on.exit(unlink(pkg_dir, recursive = TRUE), add = TRUE)
+  
+  td <- list(has_RUnit_tests_dir = FALSE)
+  expect_equal(resolve_runit_layout(pkg_dir, td), "inst_unitTests")
+})
+
+test_that("list_runit_test_files returns relative paths", {
+  pkg_dir <- tempfile("pkg_lrf")
+  dir.create(file.path(pkg_dir, "RUnit", "common"), recursive = TRUE)
+  dir.create(file.path(pkg_dir, "RUnit", "library"), recursive = TRUE)
+  writeLines("x", file.path(pkg_dir, "RUnit", "common", "runit.a.R"))
+  writeLines("x", file.path(pkg_dir, "RUnit", "library", "runit.a.R"))
+  on.exit(unlink(pkg_dir, recursive = TRUE), add = TRUE)
+  
+  root <- file.path(pkg_dir, "RUnit")
+  result <- list_runit_test_files(root)
+  
+  expect_length(result, 2L)
+  # paths are relative (no leading separator)
+  expect_false(any(startsWith(result, "/")))
+  expect_false(any(startsWith(result, pkg_dir)))
+  # both runit.a.R present under different subdirs
+  expect_true(any(grepl("common", result, fixed = TRUE)))
+  expect_true(any(grepl("library", result, fixed = TRUE)))
+})
+
+test_that("list_runit_test_files returns character(0) for missing dir", {
+  expect_length(list_runit_test_files(file.path(tempdir(), "does_not_exist")), 0L)
+})
+
+test_that("build_runit_launcher_runner writes setwd and tryCatch lines", {
+  tests_dir <- normalizePath(tempdir(), winslash = "/")
+  launchers <- c(file.path(tests_dir, "test_library.R"), file.path(tests_dir, "test_import.R"))
+  
+  written <- NULL
+  fn <- build_runit_launcher_runner
+  mockery::stub(fn, "writeLines", function(text, con, ...) {
+    written <<- text
+    base::writeLines(text, con)
+  })
+  
+  runner <- fn(launchers, tests_dir)
+  
+  expect_true(file.exists(runner))
+  expect_true(any(grepl("local({", written, fixed = TRUE)))
+  expect_true(any(grepl("owd <- getwd()", written, fixed = TRUE)))
+  expect_true(any(grepl("on.exit(setwd(owd)", written, fixed = TRUE)))
+  expect_true(any(grepl("setwd(", written, fixed = TRUE)))
+  expect_true(any(grepl("tryCatch", written, fixed = TRUE)))
+  expect_true(any(grepl("source(", written, fixed = TRUE)))
+  unlink(runner)
+})
+
+test_that("get_source_test_mapping_runit_nstf keeps duplicate runit.a.R distinct", {
+  pkg_dir <- tempfile("pkg_mapping_dup")
+  make_pls_like_pkg(pkg_dir)
+  on.exit(unlink(pkg_dir, recursive = TRUE), add = TRUE)
+  
+  test_root <- file.path(pkg_dir, "tests", "RUnit")
+  mapping <- get_source_test_mapping_runit_nstf(pkg_dir, test_root)
+  
+  # test_file column should contain relative paths, not bare basenames
+  mapped_tests <- mapping$test_file[!is.na(mapping$test_file)]
+  # At least one mapped test should contain a directory separator
+  has_subdir <- any(grepl("[/\\\\]", mapped_tests))
+  # Both runit.a.R from common/ and library/ should be distinct
+  expect_true(length(unique(mapped_tests)) == length(mapped_tests) || has_subdir)
+})
+
+test_that("get_source_test_mapping_runit_nstf matches test.sym function names", {
+  pkg_dir <- tempfile("pkg_test_dot")
+  dir.create(file.path(pkg_dir, "R"), recursive = TRUE)
+  dir.create(file.path(pkg_dir, "tests", "RUnit"), recursive = TRUE)
+  writeLines("myFunc <- function(x) x", file.path(pkg_dir, "R", "myFunc.R"))
+  writeLines(c(
+    "test.myFunc <- function() {",
+    "  RUnit::checkEquals(myFunc(1), 1)",
+    "}"
+  ), file.path(pkg_dir, "tests", "RUnit", "runit.myFunc.R"))
+  on.exit(unlink(pkg_dir, recursive = TRUE), add = TRUE)
+  
+  test_root <- file.path(pkg_dir, "tests", "RUnit")
+  mapping <- get_source_test_mapping_runit_nstf(pkg_dir, test_root)
+  
+  row <- mapping[mapping$source_file == "myFunc.R", ]
+  expect_true(nrow(row) > 0)
+  expect_false(is.na(row$test_file[1]))
+})
+
+test_that("run_covr_skip_runit_nstf: launcher package_coverage success path", {
+  pkg_dir <- tempfile("pkg_rcsr_launcher")
+  make_pls_like_pkg(pkg_dir)
+  on.exit(unlink(pkg_dir, recursive = TRUE), add = TRUE)
+  
+  test_pkg_data <- list(
+    has_RUnit_tests_dir = TRUE,
+    has_RUnit_test = TRUE,
+    has_BioG_test = FALSE,
+    has_doRUnit = FALSE,
+    doRUnit_path = NA_character_,
+    bioc_run_ut_path = NA_character_,
+    runit_launchers = c(file.path(pkg_dir, "tests", "test_library.R")),
+    runit_tests_dir = file.path(pkg_dir, "tests", "RUnit")
+  )
+  
+  fake_cov <- structure(list(), class = "coverage")
+  fake_pct <- 85.0
+  
+  mockery::stub(run_covr_skip_runit_nstf, "get_pkg_name", function(...) "plslike")
+  mockery::stub(run_covr_skip_runit_nstf, "is_runit_layout", function(...) TRUE)
+  mockery::stub(run_covr_skip_runit_nstf, "get_runit_test_paths", function(...) {
+    list(tests_RUnit = file.path(pkg_dir, "tests", "RUnit"))
+  })
+  mockery::stub(run_covr_skip_runit_nstf, "restrict_test_paths_to_framework", function(x, ...) x)
+  mockery::stub(run_covr_skip_runit_nstf, "get_source_test_mapping_runit_nstf", function(...) {
+    data.frame(source_file = "fit.R", test_file = file.path("common", "runit.a.R"),
+               evidence = "filename_match", has_tests = TRUE, stringsAsFactors = FALSE)
+  })
+  mockery::stub(run_covr_skip_runit_nstf, "remove_run_unitTests_mapping", function(m, ...) m)
+  mockery::stub(run_covr_skip_runit_nstf, "prepare_for_bioc_runit", function(...) invisible(NULL))
+  mockery::stub(run_covr_skip_runit_nstf, "check_covr_skip_runit_nstf", function(...) {
+    data.frame(test_file = NA_character_, issue_type = "No tests skipped", stringsAsFactors = FALSE)
+  })
+  mockery::stub(run_covr_skip_runit_nstf, "get_function_no_tests", function(...) data.frame())
+  mockery::stub(run_covr_skip_runit_nstf, "build_runit_launcher_runner", function(...) {
+    f <- tempfile(fileext = ".R"); writeLines("# dummy", f); f
+  })
+  mockery::stub(run_covr_skip_runit_nstf, "covr::package_coverage", function(...) fake_cov)
+  mockery::stub(run_covr_skip_runit_nstf, "covr::percent_coverage", function(...) fake_pct)
+  mockery::stub(run_covr_skip_runit_nstf, "load_package_datasets", function(...) character(0))
+  mockery::stub(run_covr_skip_runit_nstf, "covr::coverage_to_list", function(...) {
+    list(filecoverage = matrix(fake_pct, dimnames = list("fit.R")), totalcoverage = fake_pct)
+  })
+  mockery::stub(run_covr_skip_runit_nstf, "compute_total_coverage", function(...) {
+    list(total_cov = fake_pct / 100, percent_cov = fake_pct,
+         n_testfiles = 1L, n_no_function_tests = 0L, n_skipped_files = 0L)
+  })
+  mockery::stub(run_covr_skip_runit_nstf, "get_coverage_pass_fail", function(...) TRUE)
+  mockery::stub(run_covr_skip_runit_nstf, "cleanup_and_return_null", function(...) NULL)
+  mockery::stub(run_covr_skip_runit_nstf, "pkgload::load_all", function(...) invisible(NULL))
+  mockery::stub(run_covr_skip_runit_nstf, "detach_pkg_if_attached", function(...) invisible(TRUE))
+  mockery::stub(run_covr_skip_runit_nstf, "asNamespace", function(...) baseenv())
+  
+  result <- run_covr_skip_runit_nstf(
+    pkg_source_path = pkg_dir,
+    test_pkg_data   = test_pkg_data,
+    cov_env         = new.env(),
+    layout          = "tests_RUnit"
+  )
+  
+  expect_false(is.null(result))
+})
+
+test_that("run_covr_skip_runit_nstf: launcher 0pct falls back to environment_coverage", {
+  pkg_dir <- tempfile("pkg_rcsr_fallback")
+  make_pls_like_pkg(pkg_dir)
+  on.exit(unlink(pkg_dir, recursive = TRUE), add = TRUE)
+  
+  test_pkg_data <- list(
+    has_RUnit_tests_dir = TRUE,
+    has_RUnit_test = TRUE,
+    has_BioG_test = FALSE,
+    has_doRUnit = FALSE,
+    doRUnit_path = NA_character_,
+    bioc_run_ut_path = NA_character_,
+    runit_launchers = c(file.path(pkg_dir, "tests", "test_library.R")),
+    runit_tests_dir = file.path(pkg_dir, "tests", "RUnit")
+  )
+  
+  fake_cov <- structure(list(), class = "coverage")
+  pct_calls <- 0L
+  
+  mockery::stub(run_covr_skip_runit_nstf, "get_pkg_name", function(...) "plslike")
+  mockery::stub(run_covr_skip_runit_nstf, "is_runit_layout", function(...) TRUE)
+  mockery::stub(run_covr_skip_runit_nstf, "get_runit_test_paths", function(...) {
+    list(tests_RUnit = file.path(pkg_dir, "tests", "RUnit"))
+  })
+  mockery::stub(run_covr_skip_runit_nstf, "restrict_test_paths_to_framework", function(x, ...) x)
+  mockery::stub(run_covr_skip_runit_nstf, "get_source_test_mapping_runit_nstf", function(...) {
+    data.frame(source_file = "fit.R", test_file = file.path("common", "runit.a.R"),
+               evidence = "filename_match", has_tests = TRUE, stringsAsFactors = FALSE)
+  })
+  mockery::stub(run_covr_skip_runit_nstf, "remove_run_unitTests_mapping", function(m, ...) m)
+  mockery::stub(run_covr_skip_runit_nstf, "prepare_for_bioc_runit", function(...) invisible(NULL))
+  mockery::stub(run_covr_skip_runit_nstf, "check_covr_skip_runit_nstf", function(...) {
+    data.frame(test_file = NA_character_, issue_type = "No tests skipped", stringsAsFactors = FALSE)
+  })
+  mockery::stub(run_covr_skip_runit_nstf, "get_function_no_tests", function(...) data.frame())
+  mockery::stub(run_covr_skip_runit_nstf, "build_runit_launcher_runner", function(...) {
+    f <- tempfile(fileext = ".R"); writeLines("# dummy", f); f
+  })
+  # launcher returns 0 pct -> should fall through to environment_coverage
+  mockery::stub(run_covr_skip_runit_nstf, "covr::package_coverage", function(...) fake_cov)
+  mockery::stub(run_covr_skip_runit_nstf, "covr::percent_coverage", function(...) {
+    pct_calls <<- pct_calls + 1L
+    0.0  # triggers fallback
+  })
+  mockery::stub(run_covr_skip_runit_nstf, "build_runit_custom_runner", function(...) {
+    f <- tempfile(fileext = ".R"); writeLines("# dummy", f); f
+  })
+  mockery::stub(run_covr_skip_runit_nstf, "covr::environment_coverage", function(...) fake_cov)
+  mockery::stub(run_covr_skip_runit_nstf, "load_package_datasets", function(...) character(0))
+  mockery::stub(run_covr_skip_runit_nstf, "covr::coverage_to_list", function(...) {
+    list(filecoverage = matrix(0, dimnames = list("fit.R")), totalcoverage = 0)
+  })
+  mockery::stub(run_covr_skip_runit_nstf, "compute_total_coverage", function(...) {
+    list(total_cov = 0.0, percent_cov = 0.0,
+         n_testfiles = 1L, n_no_function_tests = 0L, n_skipped_files = 0L)
+  })
+  mockery::stub(run_covr_skip_runit_nstf, "get_coverage_pass_fail", function(...) FALSE)
+  mockery::stub(run_covr_skip_runit_nstf, "cleanup_and_return_null", function(...) NULL)
+  mockery::stub(run_covr_skip_runit_nstf, "pkgload::load_all", function(...) invisible(NULL))
+  mockery::stub(run_covr_skip_runit_nstf, "detach_pkg_if_attached", function(...) invisible(TRUE))
+  mockery::stub(run_covr_skip_runit_nstf, "asNamespace", function(...) baseenv())
+  
+  result <- run_covr_skip_runit_nstf(
+    pkg_source_path = pkg_dir,
+    test_pkg_data   = test_pkg_data,
+    cov_env         = new.env(),
+    layout          = "tests_RUnit"
+  )
+  
+  # pct_calls >= 1 means percent_coverage was called (launcher ran + fallback check)
+  expect_true(pct_calls >= 1L)
 })

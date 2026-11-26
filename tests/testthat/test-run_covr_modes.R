@@ -1,4 +1,3 @@
-
 test_that("loads datasets using utils::data() when installed package datasets are available", {
   dummy_env <- new.env(parent = emptyenv())
   ld <- get("load_package_datasets", envir = asNamespace("test.assessr"))
@@ -3005,4 +3004,90 @@ test_that("decider chooses testthat branch when testthat structure exists", {
   
   expect_equal(res$covr_list, "FAKE_COV_RESULT")
   expect_equal(res$tf_type, "standard testing framework")
+})
+
+
+# ---- Issue #26: runit routing in run_covr_decider / run_one_framework ----
+
+test_that("run_covr_decider routes runit framework with correct layout", {
+  pkg_dir <- tempfile("pkg_runit_decider")
+  dir.create(file.path(pkg_dir, "tests", "RUnit"), recursive = TRUE)
+  on.exit(unlink(pkg_dir, recursive = TRUE), add = TRUE)
+  
+  test_pkg_data <- list(has_RUnit_tests_dir = TRUE, runit_launchers = character(0))
+  
+  captured_layout <- NULL
+  mockery::stub(run_covr_decider, "resolve_runit_layout", function(path, data) {
+    "tests_RUnit"
+  })
+  mockery::stub(run_covr_decider, "run_covr_skip_runit_nstf", function(path, data, env, framework, layout) {
+    captured_layout <<- layout
+    "FAKE_RUNIT_COV"
+  })
+  
+  res <- run_covr_decider(
+    framework       = "runit",
+    pkg_source_path = pkg_dir,
+    test_pkg_data   = test_pkg_data,
+    cov_env         = list(),
+    covr_timeout    = 10
+  )
+  
+  expect_equal(res$tf_type, "non-standard testing framework - RUnit")
+  expect_equal(res$covr_list, "FAKE_RUNIT_COV")
+  expect_equal(captured_layout, "tests_RUnit")
+})
+
+test_that("run_covr_decider returns NULL covr_list for unrecognised framework", {
+  pkg_dir <- tempfile("pkg_runit_fallthrough")
+  dir.create(file.path(pkg_dir, "tests"), recursive = TRUE)
+  on.exit(unlink(pkg_dir, recursive = TRUE), add = TRUE)
+  
+  res <- run_covr_decider(
+    framework       = "unknown_framework",
+    pkg_source_path = pkg_dir,
+    test_pkg_data   = list(),
+    cov_env         = list(),
+    covr_timeout    = 10
+  )
+  
+  expect_null(res$covr_list)
+  expect_null(res$tf_type)
+})
+
+test_that("run_one_framework routes runit through run_covr_decider", {
+  pkg_dir <- tempfile("pkg_rof_runit")
+  dir.create(file.path(pkg_dir, "tests", "RUnit"), recursive = TRUE)
+  on.exit(unlink(pkg_dir, recursive = TRUE), add = TRUE)
+  
+  test_pkg_data <- list(
+    has_RUnit_tests_dir = TRUE,
+    has_RUnit_test = TRUE,
+    has_BioG_test = FALSE,
+    runit_launchers = character(0)
+  )
+  
+  fake_covr_list <- list(
+    total_cov = 0.5,
+    res_cov = list(name = "plslike", coverage = list(filecoverage = NA, totalcoverage = 0), errors = NA, notes = NA)
+  )
+  
+  mockery::stub(run_one_framework, "safe_unload_package", function(...) invisible(NULL))
+  mockery::stub(run_one_framework, "initialise_covr_env", function(...) new.env())
+  mockery::stub(run_one_framework, "cleanup_and_return_null", function(...) NULL)
+  mockery::stub(run_one_framework, "run_covr_decider", function(...) {
+    list(covr_list = fake_covr_list, tf_type = "non-standard testing framework - RUnit")
+  })
+  mockery::stub(run_one_framework, "create_empty_covr_list", function(...) fake_covr_list)
+  
+  result <- run_one_framework(
+    framework       = "runit",
+    pkg             = "plslike",
+    test_pkg_data   = test_pkg_data,
+    pkg_source_path = pkg_dir,
+    covr_timeout    = 10
+  )
+  
+  expect_equal(result$test_framework_type, "non-standard testing framework - RUnit")
+  expect_equal(result$framework_id, "runit")
 })

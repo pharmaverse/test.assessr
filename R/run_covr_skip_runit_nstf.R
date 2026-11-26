@@ -1,3 +1,66 @@
+#' Resolve RUnit layout for a package
+#'
+#' Returns "tests_RUnit" if tests/RUnit dir is detected and inst/unitTests absent.
+#' inst/unitTests takes precedence when both exist.
+#'
+#' @param pkg_source_path Character scalar. Path to the package root.
+#' @param test_pkg_data List. Output of check_pkg_tests_and_snaps().
+#' @return Character scalar "inst_unitTests" or "tests_RUnit".
+#' @keywords internal
+#' @noRd
+resolve_runit_layout <- function(pkg_source_path, test_pkg_data) {
+  inst_unitTests <- file.path(pkg_source_path, "inst", "unitTests")
+  if (isTRUE(test_pkg_data$has_RUnit_tests_dir) && !dir.exists(inst_unitTests)) {
+    return("tests_RUnit")
+  }
+  return("inst_unitTests")
+}
+
+#' List RUnit test files relative to root
+#'
+#' @param root Character scalar. Path to the RUnit test directory.
+#' @return Character vector of relative file paths; character(0) if dir missing.
+#' @keywords internal
+#' @noRd
+list_runit_test_files <- function(root) {
+  if (!dir.exists(root)) return(character(0))
+  list.files(root, pattern = "^runit.*\\.[rR]$", recursive = TRUE)
+}
+
+#' Build a launcher-based RUnit runner script
+#'
+#' Writes a tempfile that sources each launcher with wd set to tests_dir.
+#' Launcher stop() calls are caught and logged without aborting coverage.
+#'
+#' @param launchers Character vector of absolute launcher script paths.
+#' @param tests_dir Character scalar. Directory to set as wd before sourcing.
+#' @return Character scalar path to the written tempfile.
+#' @keywords internal
+#' @noRd
+build_runit_launcher_runner <- function(launchers, tests_dir) {
+  tests_dir <- normalizePath(tests_dir, winslash = "/", mustWork = FALSE)
+  runner <- tempfile(fileext = ".R")
+  
+  launcher_lines <- vapply(launchers, function(l) {
+    abs_l <- normalizePath(l, winslash = "/", mustWork = FALSE)
+    sprintf(
+      '  tryCatch(local(source("%s")), error = function(e) message("launcher failed: ", conditionMessage(e)))',
+      abs_l
+    )
+  }, character(1))
+  
+  writeLines(c(
+    'local({',
+    '  owd <- getwd()',
+    '  on.exit(setwd(owd), add = TRUE)',
+    sprintf('  setwd("%s")', tests_dir),
+    launcher_lines,
+    '})'
+  ), con = runner)
+  
+  return(runner)
+}
+
 #' Run coverage with skip detection for RUnit and Bioconductor RUnit-based packages
 #'
 #' `run_covr_skip_runit_nstf()` orchestrates coverage for packages using the
@@ -29,27 +92,30 @@
 #'   \code{run_one_framework}), restricts test paths to the framework-specific
 #'   directory. Use when a package has multiple frameworks (e.g. testthat + testit)
 #'   to avoid mixing paths across frameworks.
+#' @param layout Optional character "inst_unitTests" or "tests_RUnit". When NULL,
+#'   resolved automatically via resolve_runit_layout().
 #'
 #' @return A `covr` coverage object on success; `NULL` on failure (via `cleanup_and_return_null()`).
 #'
 #' @details
-#' Use this function **only** for packages that follow the Bioconductor RUnit layout:
-#' - tests are located in `inst/unitTests/`, and/or
-#' - a `tests/run_unitTests.R` wrapper exists that calls an internal `.test()` / `testPackage()` runner.
+#' Use this function for packages that follow the Bioconductor RUnit layout
+#' (`inst/unitTests/`) or the pls-style layout (`tests/RUnit/`).
 #'
 #' @return A covr coverage object, or NULL on failure.
-#' 
+#'
 #' @keywords internal
-run_covr_skip_runit_nstf <- function(pkg_source_path, 
-                                     test_pkg_data, 
+#' @noRd
+run_covr_skip_runit_nstf <- function(pkg_source_path,
+                                     test_pkg_data,
                                      cov_env,
-                                     framework = NULL
-                                     ) {
+                                     framework = NULL,
+                                     layout = NULL
+) {
   
   cov_env  <- new.env(parent = globalenv())
   pkg_name <- get_pkg_name(pkg_source_path)
+  layout   <- if (is.null(layout)) resolve_runit_layout(pkg_source_path, test_pkg_data) else layout
   
-  # Ensure this really looks like a BioC/RUnit package (caller can decide too)
   # Ensure this really looks like an RUnit package (BioC or RUnit-only; caller can decide too)
   if (!is_runit_layout(pkg_source_path, test_pkg_data)) {
     message("Package does not appear to use the RUnit layout (inst/unitTests); ",
@@ -58,7 +124,7 @@ run_covr_skip_runit_nstf <- function(pkg_source_path,
   
   # Assemble candidate test roots and normalize (reuses your existing helper)
   path    <- as.character(pkg_source_path)
-  testdir <- file.path(path, "inst/unitTests")
+  testdir <- if (layout == "tests_RUnit") file.path(path, "tests", "RUnit") else file.path(path, "inst/unitTests")
   test_path_list <- get_runit_test_paths(test_pkg_data, testdir)
   
   # restrict paths 
@@ -127,9 +193,9 @@ run_covr_skip_runit_nstf <- function(pkg_source_path,
   # create df with source files with no tests
   no_tests_df <- get_function_no_tests(mapping) 
   
-  # Prepare mapping and build test file list from inst/unitTests
+  # Prepare mapping and build test file list from the resolved layout root
   clean_mapping <- if (anyNA(mapping)) tidyr::drop_na(mapping) else mapping
-  root <- file.path(pkg_source_path, "inst", "unitTests")
+  root <- if (layout == "tests_RUnit") file.path(pkg_source_path, "tests", "RUnit") else file.path(pkg_source_path, "inst", "unitTests")
   test_files_clean <- file.path(root, clean_mapping$test_file)
   if (length(skip_tests) > 0) {
     test_files_clean <- setdiff(test_files_clean, file.path(root, skip_tests))
@@ -175,10 +241,29 @@ run_covr_skip_runit_nstf <- function(pkg_source_path,
     
     pkg_ns <- asNamespace(pkg_name)
     
-    # 2) Try doRUnit.R first when available (matches R CMD check for CRAN RUnit packages)
+    # 2a) For tests_RUnit layout: try launcher-based package_coverage first
     cov <- NULL
+    if (layout == "tests_RUnit" && length(test_pkg_data$runit_launchers) > 0) {
+      runner <- build_runit_launcher_runner(
+        test_pkg_data$runit_launchers,
+        file.path(pkg_source_path, "tests")
+      )
+      cov <- tryCatch({
+        covr::package_coverage(
+          path = pkg_source_path, type = "none",
+          code = readLines(runner, warn = FALSE), quiet = TRUE
+        )
+      }, error = function(e) {
+        message("launcher package_coverage failed: ", conditionMessage(e))
+        NULL
+      })
+      pct <- if (is.null(cov)) NA_real_ else tryCatch(covr::percent_coverage(cov), error = function(e) NA_real_)
+      if (!is.numeric(pct) || is.na(pct) || pct == 0) cov <- NULL
+    }
+    
+    # 2b) Try doRUnit.R first when available (matches R CMD check for CRAN RUnit packages)
     doRUnit_path <- test_pkg_data$doRUnit_path
-    use_doRUnit <- !is.null(doRUnit_path) && !is.na(doRUnit_path) && file.exists(doRUnit_path)
+    use_doRUnit <- layout != "tests_RUnit" && !is.null(doRUnit_path) && !is.na(doRUnit_path) && file.exists(doRUnit_path)
     
     if (use_doRUnit) {
       message(paste0("Trying doRUnit.R for ", pkg_name))
@@ -213,7 +298,8 @@ run_covr_skip_runit_nstf <- function(pkg_source_path,
         runner <- build_runit_runTests_runner(pkg_name, tests, pkg_root = pkg_source_path)
       } else {
         message(paste0("Using custom runner for ", pkg_name, " (", length(tests), " test files)"))
-        runner <- build_runit_custom_runner(tests, pkg_name = pkg_name, pkg_root = pkg_source_path)
+        pkg_root_for_runner <- if (layout == "tests_RUnit") file.path(pkg_source_path, "tests") else pkg_source_path
+        runner <- build_runit_custom_runner(tests, pkg_name = pkg_name, pkg_root = pkg_root_for_runner)
       }
       cov <- covr::environment_coverage(
         env        = pkg_ns,
@@ -353,6 +439,7 @@ run_covr_skip_runit_nstf <- function(pkg_source_path,
 #'  - explicit flag in test_pkg_data$has_BioG_test
 #'
 #' @keywords internal
+#' @noRd
 is_bioc_runit_layout <- function(pkg_source_path, test_pkg_data = NULL) {
   is_runit_layout(pkg_source_path, test_pkg_data)
 }
@@ -370,6 +457,7 @@ is_bioc_runit_layout <- function(pkg_source_path, test_pkg_data = NULL) {
 #' @param test_pkg_data List or NULL. Output from check_pkg_tests_and_snaps().
 #' @return Logical. TRUE if the package uses RUnit layout.
 #' @keywords internal
+#' @noRd
 is_runit_layout <- function(pkg_source_path, test_pkg_data = NULL) {
   inst_unitTests <- file.path(pkg_source_path, "inst", "unitTests")
   run_ut_wrapper <- file.path(pkg_source_path, "tests", "run_unitTests.R")
@@ -384,6 +472,7 @@ is_runit_layout <- function(pkg_source_path, test_pkg_data = NULL) {
 #'
 #' Safely detaches a package from the search path and optionally unloads its namespace.
 #' @keywords internal
+#' @noRd
 detach_pkg_if_attached <- function(pkg, unload_namespace = TRUE, quiet = TRUE) {
   
   pkg_search_name <- paste0("package:", pkg)
@@ -407,12 +496,13 @@ detach_pkg_if_attached <- function(pkg, unload_namespace = TRUE, quiet = TRUE) {
 #' @param pkg_source_path Character. Path to package source.
 #' @param detach_bioc_infra Logical. If TRUE (default for BioC packages), detach
 #'   IRanges, S4Vectors, BiocGenerics. Set to FALSE for RUnit-only packages.
-#'   
+#'
 #' @keywords internal
+#' @noRd
 prepare_for_bioc_runit <- function(pkg_name, 
                                    pkg_source_path, 
                                    detach_bioc_infra
-                                   ) {
+) {
   
   # Detach target if already attached
   detach_pkg_if_attached(pkg_name)
@@ -447,6 +537,7 @@ prepare_for_bioc_runit <- function(pkg_name,
 #'
 #' @return A data frame listing test files and any issues encountered.
 #' @keywords internal
+#' @noRd
 check_covr_skip_runit_nstf <- function(pkg_source_path, mapping, test_path) {
   
   # Guard: RUnit must be available
@@ -499,23 +590,28 @@ check_covr_skip_runit_nstf <- function(pkg_source_path, mapping, test_path) {
                          issue_type = character(),
                          stringsAsFactors = FALSE)
   
+  # Detect test function prefix once from all test files
+  all_abs_files <- file.path(test_dir[[1]], clean_mapping$test_file)
+  prefix        <- detect_runit_test_prefix(all_abs_files)
+  testFuncRegexp <- switch(prefix,
+                           runit = "^runit[.]|^test.+",
+                           Test  = "^Test[.]|^test.+",
+                           "^test.+"
+  )
+  
   run_one_file <- function(test) {
     
-    abs <- file.path(test_dir, test)
+    abs <- file.path(test_dir[[1]], test)
     
     # Missing file -> flag as 'missing'
     if (!file.exists(abs)) {
       return(data.frame(test_file = test, issue_type = "missing", stringsAsFactors = FALSE))
     }
     
-    # load RUnit to ensure all RUnit functions are available for tests
-    # library(RUnit)
-    
     # Ensure RUnit assertions are visible to legacy tests (temporary attach)
     if (!"package:RUnit" %in% search()) {
       attachNamespace("RUnit")
       on.exit({
-        # Detach if we attached it
         if ("package:RUnit" %in% search()) {
           try(detach("package:RUnit", unload = TRUE, character.only = TRUE), silent = TRUE)
         }
@@ -528,7 +624,7 @@ check_covr_skip_runit_nstf <- function(pkg_source_path, mapping, test_path) {
         RUnit::runTestFile(
           absFileName        = abs,
           useOwnErrorHandler = TRUE,
-          testFuncRegexp     = "^test.+"
+          testFuncRegexp     = testFuncRegexp
         )
       },
       error = function(e) {
@@ -636,6 +732,7 @@ remove_run_unitTests_mapping <- function(mapping, test_pkg_data) {
 #' @return named list of **existing** directories (e.g., `bioc_unitTests`, `tests_root`);
 #'         if nothing is found, returns a single `fallback` entry pointing to `testdir`.
 #' @keywords internal
+#' @noRd
 get_runit_test_paths <- function(test_pkg_data, testdir) {
   # Normalize incoming testdir
   
@@ -675,6 +772,27 @@ get_runit_test_paths <- function(test_pkg_data, testdir) {
     }
   }
   
+  # Also detect tests/RUnit (pls-style layout)
+  # Probe upward from testdir to find the package root
+  pkg_root_for_pls <- {
+    cands <- unique(c(testdir, dirname(testdir), dirname(dirname(testdir)), dirname(dirname(dirname(testdir)))))
+    found <- NA_character_
+    for (cdir in cands) {
+      if (file.exists(file.path(cdir, "DESCRIPTION"))) {
+        found <- normalizePath(cdir, winslash = "/", mustWork = FALSE)
+        break
+      }
+    }
+    found
+  }
+  if (!is.na(pkg_root_for_pls)) {
+    tests_runit_dir <- normalizePath(file.path(pkg_root_for_pls, "tests", "RUnit"), winslash = "/", mustWork = FALSE)
+    already_added   <- tests_runit_dir %in% unlist(out)
+    if (dir.exists(tests_runit_dir) && !already_added) {
+      out$tests_RUnit <- tests_runit_dir
+    }
+  }
+  
   # Single return point
   return(out)
   
@@ -691,6 +809,16 @@ get_runit_test_paths <- function(test_pkg_data, testdir) {
 #' @keywords internal
 #' @noRd
 get_source_test_mapping_runit_nstf <- function(pkg_source_path, test_dir) {
+  # Handle vector test_dir by applying per-root and combining
+  if (length(test_dir) > 1) {
+    rows <- lapply(test_dir, function(td) {
+      get_source_test_mapping_runit_nstf(pkg_source_path, td)
+    })
+    combined <- do.call(rbind, rows)
+    rownames(combined) <- NULL
+    return(combined)
+  }
+  
   source_dir <- file.path(pkg_source_path, "R")
   
   src_files  <- list.files(source_dir, pattern = "\\.R$", full.names = TRUE, recursive = FALSE)
@@ -704,7 +832,12 @@ get_source_test_mapping_runit_nstf <- function(pkg_source_path, test_dir) {
   }
   
   src_basenames  <- basename(src_files)
-  test_basenames <- basename(test_files)
+  # Use paths relative to test_dir so duplicate basenames across subdirs stay distinct
+  # Normalise separators without calling normalizePath on individual files,
+  # which warns for non-existent paths (e.g. synthetic fixtures in tests)
+  test_dir_fwd   <- gsub("\\\\", "/", test_dir)
+  test_files_fwd <- gsub("\\\\", "/", test_files)
+  test_basenames <- sub(paste0("^", test_dir_fwd, "/?"), "", test_files_fwd)
   
   # Split a stem into tokens by any non-alphanumeric delimiter (underscore, dash, dot, etc.)
   tokenize_stem <- function(stem) {
@@ -778,10 +911,10 @@ get_source_test_mapping_runit_nstf <- function(pkg_source_path, test_dir) {
     }
     
     # 3) RUnit style test function names
-    #    Looks like: test_<name> <- function() { ... }
-    runit_defs <- grep('^\\s*test_[A-Za-z0-9._-]+\\s*<-\\s*function\\s*\\(', lines, value = TRUE, perl = TRUE)
+    #    Looks like: test_<name> / test.<name> / test-<name> <- function() { ... }
+    runit_defs <- grep('^\\s*test[._-][A-Za-z0-9._-]+\\s*<-\\s*function\\s*\\(', lines, value = TRUE, perl = TRUE)
     if (length(runit_defs)) {
-      names <- gsub('^\\s*(test_[A-Za-z0-9._-]+)\\s*<-\\s*function\\s*\\(.*$', '\\1', runit_defs, perl = TRUE)
+      names <- gsub('^\\s*(test[._-][A-Za-z0-9._-]+)\\s*<-\\s*function\\s*\\(.*$', '\\1', runit_defs, perl = TRUE)
       name_toks <- tolower(unlist(strsplit(names, "[^A-Za-z0-9]+", perl = TRUE)))
       if (s %in% name_toks) return(TRUE)
     }
@@ -993,4 +1126,4 @@ build_runit_custom_runner <- function(tests, pkg_name = NULL, pkg_root = NULL) {
   )
   writeLines(runner_lines, runner)
   return(runner)
-}  
+} 
