@@ -218,14 +218,13 @@ run_covr_skip_runit_nstf <- function(pkg_source_path,
   
   message(paste0("running coverage manually for ", pkg_name))
   
-  
+  # 0) Guard: need at least one test file for custom runner fallback
+  if (length(test_files_clean) == 0L) {
+    message("No test files remain after skipping; skipping coverage.")
+    return(cleanup_and_return_null("No test files remain after skipping.", env = cov_env))
+  }
   
   coverage <- tryCatch({
-    
-    # 0) Guard: need at least one test file for custom runner fallback
-    if (length(test_files_clean) == 0L) {
-      stop("No test files provided in 'test_files_clean'.")
-    }
     
     # 1) Ensure 'methods' and 'RUnit' are attached (S4 + checks)
     if (!"methods" %in% loadedNamespaces()) {
@@ -867,7 +866,7 @@ get_source_test_mapping_runit_nstf <- function(pkg_source_path, test_dir) {
     fun_defs <- character()
     
     if (length(lines)) {
-      gen_lines <- grep('setGeneric\\("', lines, value = TRUE, fixed = TRUE)
+      gen_lines <- grep('setGeneric\\("', lines, value = TRUE, perl = TRUE)
       if (length(gen_lines)) {
         generics <- unique(sub('.*setGeneric\\("([A-Za-z0-9._]+)".*', '\\1', gen_lines))
       }
