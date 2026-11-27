@@ -70,7 +70,8 @@ get_pkg_name <- function(input_string) {
   # extract package name
   pkg_disp <- stringr::str_extract(input_string, "[^-|_]+")
   
-  return(pkg_disp)
+  # stringr >= 1.6.0 preserves input names; drop them so identical() works
+  return(unname(pkg_disp))
 }
 
 

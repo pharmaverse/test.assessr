@@ -1106,3 +1106,420 @@ test_that("compute_test_files_clean_dt: empty skip_tests vector does not filter"
   )
   expect_identical(out, expected)
 })
+
+
+# --- data.table >= 1.18 support: bz2 test file and subdirectory mirroring ---
+
+make_dt_fixture <- function(raw_name, with_subdir = TRUE) {
+  root <- file.path(tempfile("dtpkg"), "data.table")
+  inst_tests <- file.path(root, "inst", "tests")
+  dir.create(inst_tests, recursive = TRUE)
+  dir.create(file.path(root, "tests"), recursive = TRUE)
+  writeLines("x", file.path(inst_tests, raw_name))
+  writeLines("y", file.path(inst_tests, "other.Rraw"))
+  if (with_subdir) {
+    dir.create(file.path(inst_tests, "csvy"))
+    writeLines("z", file.path(inst_tests, "csvy", "test.csvy"))
+  }
+  return(root)
+}
+
+test_that("data.table MIRROR: copies tests.Rraw.bz2 and subdirectories, teardown removes them", {
+  root <- make_dt_fixture("tests.Rraw.bz2")
+  on.exit(unlink(dirname(root), recursive = TRUE), add = TRUE)
+  
+  res <- prepare_tests_for_package_dt("data.table", root, character(0), mode = "mirror")
+  
+  expect_true(file.exists(file.path(root, "tests", "tests.Rraw.bz2")))
+  expect_true(file.exists(file.path(root, "tests", "other.Rraw")))
+  expect_true(file.exists(file.path(root, "tests", "csvy", "test.csvy")))
+  
+  res$teardown()
+  expect_false(file.exists(file.path(root, "tests", "tests.Rraw.bz2")))
+  expect_false(dir.exists(file.path(root, "tests", "csvy")))
+})
+
+test_that("data.table MIRROR: uncompressed tests.Rraw (1.17.0 layout) still mirrors files", {
+  root <- make_dt_fixture("tests.Rraw", with_subdir = FALSE)
+  on.exit(unlink(dirname(root), recursive = TRUE), add = TRUE)
+  
+  res <- prepare_tests_for_package_dt("data.table", root, character(0), mode = "mirror")
+  
+  expect_true(file.exists(file.path(root, "tests", "tests.Rraw")))
+  expect_true(file.exists(file.path(root, "tests", "other.Rraw")))
+  res$teardown()
+  expect_false(file.exists(file.path(root, "tests", "tests.Rraw")))
+})
+
+test_that("data.table MIRROR: skipped when tests/ already has tests.Rraw.bz2", {
+  root <- make_dt_fixture("tests.Rraw.bz2")
+  on.exit(unlink(dirname(root), recursive = TRUE), add = TRUE)
+  writeLines("x", file.path(root, "tests", "tests.Rraw.bz2"))
+  
+  res <- prepare_tests_for_package_dt("data.table", root, character(0), mode = "mirror")
+  
+  expect_false(file.exists(file.path(root, "tests", "other.Rraw")))
+  expect_false(dir.exists(file.path(root, "tests", "csvy")))
+  res$teardown()
+  expect_true(file.exists(file.path(root, "tests", "tests.Rraw.bz2")))
+})
+
+test_that("data.table MIRROR: failed subdirectory copy is not recorded and does not error", {
+  root <- make_dt_fixture("tests.Rraw.bz2")
+  on.exit(unlink(dirname(root), recursive = TRUE), add = TRUE)
+  
+  real_copy <- file.copy
+  mockery::stub(prepare_tests_for_package_dt, "file.copy", function(from, to, overwrite = FALSE, recursive = FALSE) {
+    if (isTRUE(recursive)) stop("copy failed")
+    real_copy(from, to, overwrite = overwrite)
+  })
+  
+  res <- prepare_tests_for_package_dt("data.table", root, character(0), mode = "mirror")
+  expect_false(dir.exists(file.path(root, "tests", "csvy")))
+  expect_true(file.exists(file.path(root, "tests", "tests.Rraw.bz2")))
+  res$teardown()
+})
+
+test_that("data.table MIRROR: unsupported mode is rejected by match.arg", {
+  expect_error(prepare_tests_for_package_dt("data.table", "mockpkg", character(0), mode = "other"))
+})
+
+test_that("get_pkg_name returns an unnamed value so identical() works (stringr >= 1.6.0)", {
+  path <- "C:/Users/x/temp_file_57e83ee254dd/data.table"
+  got <- get_pkg_name(path)
+  expect_null(names(got))
+  expect_identical(got, "data.table")
+  
+  got_tar <- get_pkg_name("data.table_1.18.6.1.tar.gz")
+  expect_null(names(got_tar))
+  expect_identical(got_tar, "data.table")
+})
+
+test_that("data.table branch is taken when pkg_name comes from get_pkg_name on a full path", {
+  root <- make_dt_fixture("tests.Rraw.bz2", with_subdir = FALSE)
+  on.exit(unlink(dirname(root), recursive = TRUE), add = TRUE)
+  writeLines("test.data.table()", file.path(root, "tests", "main.R"))
+  
+  got <- compute_test_files_clean_dt(
+    pkg_name = get_pkg_name(root),
+    pkg_source_path = root,
+    clean_mapping = NULL,
+    test_pkg_data = list(),
+    skip_tests = NULL
+  )
+  expect_identical(basename(got), "main.R")
+})
+
+
+# --- Coverage for previously-uncovered branches ---
+
+# Lines 52-57: inner tryCatch fires when get() throws inside the assign loop
+test_that("run_covr_skip_dt_nstf: inner assign-loop error is caught and messaged (lines 53-56)", {
+  pkg_source_path <- tempfile("mockpkg_")
+  dir.create(pkg_source_path, recursive = TRUE, showWarnings = FALSE)
+  dir.create(file.path(pkg_source_path, "tests"), recursive = TRUE)
+  test_main <- file.path(pkg_source_path, "tests", "main.R")
+  file.create(test_main)
+  withr::defer(unlink(pkg_source_path, recursive = TRUE, force = TRUE))
+  
+  mockery::stub(run_covr_skip_dt_nstf, "get_pkg_name",             function(...) "data.table")
+  mockery::stub(run_covr_skip_dt_nstf, "compute_test_files_clean_dt", function(...) test_main)
+  mockery::stub(run_covr_skip_dt_nstf, "normalizePath",             function(path, ...) path)
+  mockery::stub(run_covr_skip_dt_nstf, "file.exists",               function(p) TRUE)
+  mockery::stub(run_covr_skip_dt_nstf, "pkgload::load_all",         function(...) TRUE)
+  
+  # ls() returns one symbol -> loop body runs (line 52)
+  mockery::stub(run_covr_skip_dt_nstf, "ls", function(envir, all.names) "bad_obj")
+  
+  # get() throws inside the loop -> inner error handler fires (lines 55-56)
+  mockery::stub(run_covr_skip_dt_nstf, "get", function(nm, envir) stop("get failed: ", nm))
+  
+  mockery::stub(run_covr_skip_dt_nstf, "load_package_datasets",     function(...) character(0))
+  mockery::stub(run_covr_skip_dt_nstf, "prepare_tests_for_package_dt", function(...) {
+    list(teardown = function() invisible(TRUE))
+  })
+  mockery::stub(run_covr_skip_dt_nstf, "covr::environment_coverage",
+                function(...) "COV")
+  mockery::stub(run_covr_skip_dt_nstf, "covr::coverage_to_list",
+                function(...) list(filecoverage = matrix(1, 1), totalcoverage = 50))
+  mockery::stub(run_covr_skip_dt_nstf, "dt_find_wrapper_tests",     function(...) character(0))
+  mockery::stub(run_covr_skip_dt_nstf, "dt_compute_untested_functions",
+                function(...) data.frame(function_name = character(), file = character(),
+                                         start_line = integer(), end_line = integer(),
+                                         stringsAsFactors = FALSE))
+  mockery::stub(run_covr_skip_dt_nstf, "compute_total_coverage", function(pct, ...) {
+    list(total_cov = pct, percent_cov = pct, n_testfiles = 1L,
+         n_no_function_tests = 0L, n_skipped_files = 0L)
+  })
+  mockery::stub(run_covr_skip_dt_nstf, "cleanup_and_return_null",   function(...) NULL)
+  
+  cov_env <- new.env(parent = emptyenv())
+  
+  expect_message(
+    {
+      res <- run_covr_skip_dt_nstf(pkg_source_path, test_pkg_data = list(), cov_env = cov_env)
+    },
+    regexp = "Failed to assign object bad_obj"
+  )
+  expect_type(res, "list")
+  expect_equal(res$total_cov, 50)
+})
+
+
+# Line 60: message fires when load_package_datasets returns a non-empty vector
+test_that("run_covr_skip_dt_nstf: messages when datasets are loaded (line 60)", {
+  pkg_source_path <- tempfile("mockpkg_")
+  dir.create(pkg_source_path, recursive = TRUE, showWarnings = FALSE)
+  dir.create(file.path(pkg_source_path, "tests"), recursive = TRUE)
+  test_main <- file.path(pkg_source_path, "tests", "main.R")
+  file.create(test_main)
+  withr::defer(unlink(pkg_source_path, recursive = TRUE, force = TRUE))
+  
+  mockery::stub(run_covr_skip_dt_nstf, "get_pkg_name",             function(...) "data.table")
+  mockery::stub(run_covr_skip_dt_nstf, "compute_test_files_clean_dt", function(...) test_main)
+  mockery::stub(run_covr_skip_dt_nstf, "normalizePath",             function(path, ...) path)
+  mockery::stub(run_covr_skip_dt_nstf, "file.exists",               function(p) TRUE)
+  mockery::stub(run_covr_skip_dt_nstf, "pkgload::load_all",         function(...) TRUE)
+  mockery::stub(run_covr_skip_dt_nstf, "ls",                        function(envir, all.names) character(0))
+  
+  # Non-empty datasets -> line 60 message
+  mockery::stub(run_covr_skip_dt_nstf, "load_package_datasets",     function(...) c("iris", "mtcars"))
+  
+  mockery::stub(run_covr_skip_dt_nstf, "prepare_tests_for_package_dt", function(...) {
+    list(teardown = function() invisible(TRUE))
+  })
+  mockery::stub(run_covr_skip_dt_nstf, "covr::environment_coverage", function(...) "COV")
+  mockery::stub(run_covr_skip_dt_nstf, "covr::coverage_to_list",
+                function(...) list(filecoverage = matrix(1, 1), totalcoverage = 60))
+  mockery::stub(run_covr_skip_dt_nstf, "dt_find_wrapper_tests",     function(...) character(0))
+  mockery::stub(run_covr_skip_dt_nstf, "dt_compute_untested_functions",
+                function(...) data.frame(function_name = character(), file = character(),
+                                         start_line = integer(), end_line = integer(),
+                                         stringsAsFactors = FALSE))
+  mockery::stub(run_covr_skip_dt_nstf, "compute_total_coverage", function(pct, ...) {
+    list(total_cov = pct, percent_cov = pct, n_testfiles = 1L,
+         n_no_function_tests = 0L, n_skipped_files = 0L)
+  })
+  mockery::stub(run_covr_skip_dt_nstf, "cleanup_and_return_null",   function(...) NULL)
+  
+  cov_env <- new.env(parent = emptyenv())
+  
+  expect_message(
+    {
+      res <- run_covr_skip_dt_nstf(pkg_source_path, test_pkg_data = list(), cov_env = cov_env)
+    },
+    regexp = "Datasets loaded: iris, mtcars"
+  )
+  expect_type(res, "list")
+})
+
+
+# Lines 61-64: outer load/dataset tryCatch error handler
+test_that("run_covr_skip_dt_nstf: load_all error triggers outer handler and execution continues (lines 61-64)", {
+  pkg_source_path <- tempfile("mockpkg_")
+  dir.create(pkg_source_path, recursive = TRUE, showWarnings = FALSE)
+  dir.create(file.path(pkg_source_path, "tests"), recursive = TRUE)
+  test_main <- file.path(pkg_source_path, "tests", "main.R")
+  file.create(test_main)
+  withr::defer(unlink(pkg_source_path, recursive = TRUE, force = TRUE))
+  
+  mockery::stub(run_covr_skip_dt_nstf, "get_pkg_name",             function(...) "data.table")
+  mockery::stub(run_covr_skip_dt_nstf, "compute_test_files_clean_dt", function(...) test_main)
+  mockery::stub(run_covr_skip_dt_nstf, "normalizePath",             function(path, ...) path)
+  mockery::stub(run_covr_skip_dt_nstf, "file.exists",               function(p) TRUE)
+  
+  # Throw from load_all -> outer error handler fires (lines 62-64)
+  mockery::stub(run_covr_skip_dt_nstf, "pkgload::load_all",
+                function(...) stop("load_all failed deliberately"))
+  
+  # Track cleanup calls
+  cleanup_msgs <- character(0)
+  mockery::stub(run_covr_skip_dt_nstf, "cleanup_and_return_null",
+                function(msg = NULL, env = NULL) {
+                  if (!is.null(msg)) cleanup_msgs <<- c(cleanup_msgs, msg)
+                  return(NULL)
+                })
+  
+  mockery::stub(run_covr_skip_dt_nstf, "prepare_tests_for_package_dt", function(...) {
+    list(teardown = function() invisible(TRUE))
+  })
+  mockery::stub(run_covr_skip_dt_nstf, "covr::environment_coverage", function(...) "COV")
+  mockery::stub(run_covr_skip_dt_nstf, "covr::coverage_to_list",
+                function(...) list(filecoverage = matrix(1, 1), totalcoverage = 70))
+  mockery::stub(run_covr_skip_dt_nstf, "dt_find_wrapper_tests",     function(...) character(0))
+  mockery::stub(run_covr_skip_dt_nstf, "dt_compute_untested_functions",
+                function(...) data.frame(function_name = character(), file = character(),
+                                         start_line = integer(), end_line = integer(),
+                                         stringsAsFactors = FALSE))
+  mockery::stub(run_covr_skip_dt_nstf, "compute_total_coverage", function(pct, ...) {
+    list(total_cov = pct, percent_cov = pct, n_testfiles = 1L,
+         n_no_function_tests = 0L, n_skipped_files = 0L)
+  })
+  
+  cov_env <- new.env(parent = emptyenv())
+  res <- run_covr_skip_dt_nstf(pkg_source_path, test_pkg_data = list(), cov_env = cov_env)
+  
+  # Outer error handler called cleanup with the error message (lines 62-63)
+  expect_true(any(grepl("Error loading package or datasets for data.table", cleanup_msgs,
+                        fixed = TRUE)))
+  expect_true(any(grepl("load_all failed deliberately", cleanup_msgs, fixed = TRUE)))
+  
+  # Execution continued past the outer tryCatch (function did not early-return NULL)
+  expect_type(res, "list")
+})
+
+
+# Lines 111-115: environment_coverage throws -> error handler sets coverage to NULL -> zeroed result
+test_that("run_covr_skip_dt_nstf: environment_coverage error triggers handler and returns zeroed result (lines 111-115)", {
+  pkg_source_path <- tempfile("mockpkg_")
+  dir.create(pkg_source_path, recursive = TRUE, showWarnings = FALSE)
+  dir.create(file.path(pkg_source_path, "tests"), recursive = TRUE)
+  test_main <- file.path(pkg_source_path, "tests", "main.R")
+  file.create(test_main)
+  withr::defer(unlink(pkg_source_path, recursive = TRUE, force = TRUE))
+  
+  mockery::stub(run_covr_skip_dt_nstf, "get_pkg_name",             function(...) "data.table")
+  mockery::stub(run_covr_skip_dt_nstf, "compute_test_files_clean_dt", function(...) test_main)
+  mockery::stub(run_covr_skip_dt_nstf, "normalizePath",             function(path, ...) path)
+  mockery::stub(run_covr_skip_dt_nstf, "file.exists",               function(p) TRUE)
+  mockery::stub(run_covr_skip_dt_nstf, "pkgload::load_all",         function(...) TRUE)
+  mockery::stub(run_covr_skip_dt_nstf, "ls",                        function(envir, all.names) character(0))
+  mockery::stub(run_covr_skip_dt_nstf, "load_package_datasets",     function(...) character(0))
+  mockery::stub(run_covr_skip_dt_nstf, "prepare_tests_for_package_dt", function(...) {
+    list(teardown = function() invisible(TRUE))
+  })
+  
+  # Throw from environment_coverage -> error handler (lines 112-115) sets coverage = NULL
+  mockery::stub(run_covr_skip_dt_nstf, "covr::environment_coverage",
+                function(...) stop("environment_coverage failed deliberately"))
+  
+  # cleanup_and_return_null returns NULL, making coverage = NULL
+  mockery::stub(run_covr_skip_dt_nstf, "cleanup_and_return_null",   function(...) NULL)
+  
+  # coverage_to_list must NOT be called (coverage is NULL)
+  mockery::stub(run_covr_skip_dt_nstf, "covr::coverage_to_list",
+                function(...) stop("should not be called when coverage is NULL"))
+  
+  cov_env <- new.env(parent = emptyenv())
+  
+  expect_message(
+    {
+      res <- run_covr_skip_dt_nstf(pkg_source_path, test_pkg_data = list(), cov_env = cov_env)
+    },
+    regexp = "No test coverage for this configuration"
+  )
+  
+  expect_type(res, "list")
+  expect_identical(res$total_cov, 0)
+  expect_identical(res$res_cov$errors, "No coverage generated")
+})
+
+
+# Lines 141-144: coverage_to_list throws -> error handler returns NA coverage
+test_that("run_covr_skip_dt_nstf: coverage_to_list error triggers handler with NA coverage (lines 141-144)", {
+  pkg_source_path <- tempfile("mockpkg_")
+  dir.create(pkg_source_path, recursive = TRUE, showWarnings = FALSE)
+  dir.create(file.path(pkg_source_path, "tests"), recursive = TRUE)
+  test_main <- file.path(pkg_source_path, "tests", "main.R")
+  file.create(test_main)
+  withr::defer(unlink(pkg_source_path, recursive = TRUE, force = TRUE))
+  
+  mockery::stub(run_covr_skip_dt_nstf, "get_pkg_name",             function(...) "data.table")
+  mockery::stub(run_covr_skip_dt_nstf, "compute_test_files_clean_dt", function(...) test_main)
+  mockery::stub(run_covr_skip_dt_nstf, "normalizePath",             function(path, ...) path)
+  mockery::stub(run_covr_skip_dt_nstf, "file.exists",               function(p) TRUE)
+  mockery::stub(run_covr_skip_dt_nstf, "pkgload::load_all",         function(...) TRUE)
+  mockery::stub(run_covr_skip_dt_nstf, "ls",                        function(envir, all.names) character(0))
+  mockery::stub(run_covr_skip_dt_nstf, "load_package_datasets",     function(...) character(0))
+  mockery::stub(run_covr_skip_dt_nstf, "prepare_tests_for_package_dt", function(...) {
+    list(teardown = function() invisible(TRUE))
+  })
+  mockery::stub(run_covr_skip_dt_nstf, "covr::environment_coverage", function(...) "COV")
+  
+  # Throw from coverage_to_list -> error handler (lines 142-143)
+  mockery::stub(run_covr_skip_dt_nstf, "covr::coverage_to_list",
+                function(...) stop("coverage_to_list failed deliberately"))
+  
+  mockery::stub(run_covr_skip_dt_nstf, "dt_find_wrapper_tests",     function(...) character(0))
+  mockery::stub(run_covr_skip_dt_nstf, "dt_compute_untested_functions",
+                function(...) data.frame(function_name = character(), file = character(),
+                                         start_line = integer(), end_line = integer(),
+                                         stringsAsFactors = FALSE))
+  mockery::stub(run_covr_skip_dt_nstf, "compute_total_coverage", function(pct, ...) {
+    list(total_cov = pct, percent_cov = pct, n_testfiles = 1L,
+         n_no_function_tests = 0L, n_skipped_files = 0L)
+  })
+  mockery::stub(run_covr_skip_dt_nstf, "cleanup_and_return_null",   function(...) NULL)
+  
+  cov_env <- new.env(parent = emptyenv())
+  res <- run_covr_skip_dt_nstf(pkg_source_path, test_pkg_data = list(), cov_env = cov_env)
+  
+  # Error handler (lines 142-143) set filecoverage = NA and totalcoverage = NA_integer_
+  expect_true(is.na(res$res_cov$coverage$filecoverage))
+  expect_true(is.na(res$res_cov$coverage$totalcoverage))
+  
+  # errors field holds the condition (not NA)
+  expect_true(inherits(res$res_cov$errors, "condition"))
+  expect_match(conditionMessage(res$res_cov$errors), "coverage_to_list failed deliberately")
+})
+
+
+# Line 285: fpath is NA when srcfile is NULL -> lapply element is NULL (function skipped)
+make_fake_fun_with_null_srcfile <- function() {
+  f <- function(...) NULL
+  sref <- list()
+  sref[[1]] <- 1L
+  sref[[3]] <- 10L
+  attr(sref, "srcfile") <- NULL   # NULL srcfile -> fpath = NA_character_ -> return(NULL)
+  attr(f, "srcref") <- sref
+  return(f)
+}
+
+test_that("dt_compute_untested_functions(): skips functions where srcfile is NULL (line 285)", {
+  pkg_name <- "data.table"
+  
+  # Non-empty coverage table to pass the first guard
+  mockery::stub(dt_compute_untested_functions, "covr::tally_coverage",
+                function(coverage) data.frame(filename = "R/a.R", line = 1L, value = 1L,
+                                              stringsAsFactors = FALSE))
+  
+  fake_ns <- new.env(parent = emptyenv())
+  assign("fun_null_srcfile", make_fake_fun_with_null_srcfile(), envir = fake_ns)
+  
+  mockery::stub(dt_compute_untested_functions, "asNamespace",
+                function(pkg) { stopifnot(pkg == pkg_name); fake_ns })
+  mockery::stub(dt_compute_untested_functions, "normalizePath", function(path, ...) path)
+  
+  res <- dt_compute_untested_functions(pkg_name, coverage = "IGNORED")
+  
+  # fun_null_srcfile is skipped (NULL srcfile path -> return(NULL) at line 285)
+  # do.call(rbind, list(NULL)) is NULL -> early return with 0-row frame
+  expect_true(is.data.frame(res))
+  expect_identical(nrow(res), 0L)
+  expect_setequal(names(res), c("function_name", "file", "start_line", "end_line"))
+})
+
+
+# Line 509: NULL clean_mapping$test_file defaults to character() for non-data.table packages
+test_that("compute_test_files_clean_dt: NULL test_files_col defaults to character() (line 509)", {
+  pkg_source_path <- file.path(tempdir(), "mockpkg_line509")
+  test_pkg_data   <- list(has_testit = FALSE)
+  
+  # clean_mapping without 'test_file' -> test_files_col is NULL -> line 509 fires
+  clean_mapping <- list(other_col = "x.R")
+  
+  mockery::stub(compute_test_files_clean_dt, "file.exists",    function(p) FALSE)
+  mockery::stub(compute_test_files_clean_dt, "normalizePath",  function(path, ...) path)
+  
+  got <- compute_test_files_clean_dt(
+    pkg_name        = "mypkg",
+    pkg_source_path = pkg_source_path,
+    clean_mapping   = clean_mapping,
+    test_pkg_data   = test_pkg_data,
+    skip_tests      = NULL
+  )
+  
+  # With no test_files_col and nothing on disk, result is empty
+  expect_type(got, "character")
+  expect_length(got, 0L)
+})

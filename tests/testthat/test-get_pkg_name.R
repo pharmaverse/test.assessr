@@ -87,3 +87,9 @@ test_that("finds package name in tar file string", {
   testthat::expect_identical(pkg_disp, "here")
   
 })
+
+test_that("result is unnamed (stringr >= 1.6.0 regression guard)", {
+  out <- get_pkg_name("data.table_1.18.6.1.tar.gz")
+  expect_null(names(out))
+  expect_identical(out, "data.table")
+})
