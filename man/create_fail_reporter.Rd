@@ -4,20 +4,20 @@
 \alias{create_fail_reporter}
 \title{Create Fail Reporter}
 \usage{
-create_fail_reporter(test_path, pkg, cov_env)
+create_fail_reporter(test_path, pkg, cov_env = NULL)
 }
 \arguments{
 \item{test_path}{Character string specifying the path to the test directory.}
 
 \item{pkg}{Character string specifying the package name.}
 
-\item{cov_env}{environment convr environment.}
+\item{cov_env}{Optional environment; not used as the test environment.}
 }
 \value{
-A list of test results with corrected contexts, or `NULL` if an error occurs.
+A list with `failed` (logical) and `error` (character or `NULL`).
 }
 \description{
-Executes all tests in a given directory using `testthat::test_dir()`
-and applies context fixes to ensure each test has a valid context.
+Runs all tests in a directory with `testthat::FailReporter`
+to detect failing tests and report setup or helper errors.
 }
 \keyword{internal}

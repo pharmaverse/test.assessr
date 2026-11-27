@@ -589,7 +589,7 @@ test_that("run_covr_modes handles Bioconductor testing framework correctly", {
   }
   
   mock_run_covr_skip_bioc_nstf <- function(pkg_source_path, test_pkg_data, cov_env,
-                                            framework = NULL, ...) {
+                                           framework = NULL, ...) {
     list(
       total_cov = 77,
       res_cov = list(
@@ -1214,7 +1214,7 @@ test_that("run_covr_modes handles error when unloading package", {
   })
   expect_true(any(grepl("Warning: Failed to unload mockpkg package", msgs, fixed = TRUE)))
   expect_true(any(grepl("Details: Simulated unload failure", msgs, fixed = TRUE)))
-
+  
 })
 
 
@@ -1386,7 +1386,7 @@ test_that("returns character(0) when package is not installed", {
 
 test_that("returns datasets from source data directory with supported extensions", {
   fake_env <- new.env(parent = emptyenv())
-
+  
   # Create a fake package root inside tempdir()
   pkg_root_dir <- file.path(tempdir(), "pkgroot_test")
   dir.create(pkg_root_dir, recursive = TRUE, showWarnings = FALSE)
@@ -1448,7 +1448,7 @@ test_that("falls back to data() if no files loaded", {
   mockery::stub(load_package_datasets, "find.package", "/fake/path")
   mockery::stub(load_package_datasets, "dir.exists", TRUE)
   mockery::stub(load_package_datasets, "list.files", character(0))
- 
+  
   ld <- get("load_package_datasets", envir = asNamespace("test.assessr"))
   
   # For this test we want to exercise only the source data directory branch.
@@ -1865,10 +1865,12 @@ test_that("setup_covr_env completes successfully", {
       "base_r_exports_loaded",
       "root_dir",
       "initial_state",
-      "helpers_loaded"
+      "helpers_loaded",
+      "setup_error"
     )
   )
   
+  expect_null(result$setup_error)
   expect_identical(result$cov_env, cov_env)
   expect_equal(result$root_dir, "/mock/root")
   expect_equal(result$helpers_loaded, "helper_one.R")
@@ -1895,6 +1897,34 @@ test_that("setup_covr_env completes successfully", {
   # Confirm namespace objects were copied into cov_env
   expect_true(exists("fun", envir = cov_env, inherits = FALSE))
   expect_true(is.function(get("fun", envir = cov_env, inherits = FALSE)))
+})
+
+test_that("setup_covr_env returns setup_error and cleans up when setup fails", {
+  cov_env <- new.env(parent = emptyenv())
+  test_path <- withr::local_tempdir()
+  sce <- get("setup_covr_env", envir = asNamespace("test.assessr"))
+  
+  mockery::stub(sce, "list.files", function(...) character(0))
+  mockery::stub(sce, "pkgload::load_all", function(...) NULL)
+  mockery::stub(sce, "asNamespace", function(pkg) new.env(parent = emptyenv()))
+  # No project root: setup must stop with a clear message
+  mockery::stub(sce, "find_project_root", function(...) NULL)
+  
+  cleanup_mock <- mockery::mock(NULL)
+  mockery::stub(sce, "cleanup_and_return_null", cleanup_mock)
+  
+  result <- suppressMessages(
+    sce(
+      pkg_source_path = "mock/path",
+      pkg_name = "mockpkg",
+      test_path = test_path,
+      cov_env = cov_env
+    )
+  )
+  
+  expect_match(result$setup_error, "Project root not found", fixed = TRUE)
+  expect_null(result$root_dir)
+  mockery::expect_called(cleanup_mock, 1)
 })
 
 

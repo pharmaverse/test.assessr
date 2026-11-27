@@ -115,3 +115,10 @@ test_that("Linux and macOS style paths are unchanged", {
   testthat::expect_identical(get_pkg_name("/Users/me/R/stringr-1.5.1.tar.gz"), "stringr")
   testthat::expect_identical(get_pkg_name("/tmp/RtmpAbc/test.package.0016"), "test.package.0016")
 })
+
+test_that("result is unnamed (stringr >= 1.6.0 regression guard)", {
+  out <- get_pkg_name("data.table_1.18.6.1.tar.gz")
+  expect_null(names(out))
+  expect_identical(out, "data.table")
+})
+
