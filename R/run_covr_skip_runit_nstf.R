@@ -130,11 +130,12 @@ run_covr_skip_runit_nstf <- function(pkg_source_path,
   # restrict paths 
   test_path_list <- restrict_test_paths_to_framework(test_path_list, framework)
   
-  test_path <- normalizePath(
-    unlist(test_path_list, use.names = TRUE),
-    winslash = "/",
-    mustWork = FALSE
-  )
+  raw_paths <- unlist(test_path_list, use.names = TRUE)
+  test_path <- if (length(raw_paths) == 0L) {
+    character(0)
+  } else {
+    normalizePath(raw_paths, winslash = "/", mustWork = FALSE)
+  }
   
   message(paste0("performing source test mapping for ", pkg_name))
   mapping <- tryCatch({
@@ -218,8 +219,8 @@ run_covr_skip_runit_nstf <- function(pkg_source_path,
   
   message(paste0("running coverage manually for ", pkg_name))
   
-  # 0) Guard: need at least one test file for custom runner fallback
-  if (length(test_files_clean) == 0L) {
+  # 0) Guard: need at least one test file OR a launcher for coverage
+  if (length(test_files_clean) == 0L && length(test_pkg_data$runit_launchers) == 0L) {
     message("No test files remain after skipping; skipping coverage.")
     return(cleanup_and_return_null("No test files remain after skipping.", env = cov_env))
   }
@@ -240,9 +241,9 @@ run_covr_skip_runit_nstf <- function(pkg_source_path,
     
     pkg_ns <- asNamespace(pkg_name)
     
-    # 2a) For tests_RUnit layout: try launcher-based package_coverage first
+    # 2a) Try launcher-based package_coverage first (any layout with launchers)
     cov <- NULL
-    if (layout == "tests_RUnit" && length(test_pkg_data$runit_launchers) > 0) {
+    if (length(test_pkg_data$runit_launchers) > 0) {
       runner <- build_runit_launcher_runner(
         test_pkg_data$runit_launchers,
         file.path(pkg_source_path, "tests")
@@ -446,11 +447,12 @@ is_bioc_runit_layout <- function(pkg_source_path, test_pkg_data = NULL) {
 #' Detect if a package uses RUnit layout (BioC or RUnit-only)
 #'
 #' Returns TRUE when the package has RUnit tests in inst/unitTests (with or without
-#' the BiocGenerics .test() runner). Heuristics:
+#' the BiocGenerics .test() runner), or a launcher-based layout. Heuristics:
 #'  - test_pkg_data$has_BioG_test (BioC full layout), OR
 #'  - test_pkg_data$has_RUnit_test (inst/unitTests, no .test required), OR
 #'  - inst/unitTests exists, OR
-#'  - tests/run_unitTests.R exists
+#'  - tests/run_unitTests.R exists, OR
+#'  - runit_launchers non-empty (launcher-based layout, e.g. cleanr)
 #'
 #' @param pkg_source_path Character. Path to package source root.
 #' @param test_pkg_data List or NULL. Output from check_pkg_tests_and_snaps().
@@ -464,7 +466,8 @@ is_runit_layout <- function(pkg_source_path, test_pkg_data = NULL) {
   isTRUE(test_pkg_data$has_BioG_test) ||
     isTRUE(test_pkg_data$has_RUnit_test) ||
     dir.exists(inst_unitTests) ||
-    file.exists(run_ut_wrapper)
+    file.exists(run_ut_wrapper) ||
+    length(test_pkg_data$runit_launchers) > 0
 }
 
 #' Detach a package if attached (internal)

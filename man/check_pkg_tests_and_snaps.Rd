@@ -15,7 +15,7 @@ A list with:
   - `has_testit`: Does tests/testit exist?
   - `has_tests_base`: Do tests exist in tests subdirectory?
   - `has_BioG_test`: Do BioGenerics tests exist in inst/tests subdirectory?
-  - `has_RUnit_test`: Do RUnit tests exist (inst/unitTests or tests/RUnit)?
+  - `has_RUnit_test`: Do RUnit tests exist (inst/unitTests, tests/RUnit, or launcher-based)?
   - `bioc_unit_tests_dir` : location of BioGenerics unit tests
   - `bioc_run_ut_path`: location of BioGenerics `run_unitTests.R`
   - `has_snaps`: Does _snaps exist inside tests/testthat?

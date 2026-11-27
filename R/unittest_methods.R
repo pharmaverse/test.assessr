@@ -7,7 +7,7 @@
 #'   - `has_testit`: Does tests/testit exist?
 #'   - `has_tests_base`: Do tests exist in tests subdirectory?
 #'   - `has_BioG_test`: Do BioGenerics tests exist in inst/tests subdirectory?
-#'   - `has_RUnit_test`: Do RUnit tests exist (inst/unitTests or tests/RUnit)?
+#'   - `has_RUnit_test`: Do RUnit tests exist (inst/unitTests, tests/RUnit, or launcher-based)?
 #'   - `bioc_unit_tests_dir` : location of BioGenerics unit tests
 #'   - `bioc_run_ut_path`: location of BioGenerics `run_unitTests.R`
 #'   - `has_snaps`: Does _snaps exist inside tests/testthat?
@@ -152,7 +152,7 @@ check_pkg_tests_and_snaps <- function(pkg_source_path) {
   # ---------- RUnit-only (inst/unitTests; optionally tests/run_unitTests.R) ----------
   # Broader than BioG: does not require .test <- function in zzz.R
   # Treat as "RUnit-only" by excluding full BioG/BiocGenerics layouts
-  has_RUnit_test <- (has_bioc_unit_tests && !has_BioG_test) || has_RUnit_tests_dir
+  has_RUnit_test <- (has_bioc_unit_tests && !has_BioG_test) || has_RUnit_tests_dir || length(runit_launchers) > 0
   
   # ---------- base-R style tests (only if no known frameworks) ----------
   has_tests_base <- FALSE

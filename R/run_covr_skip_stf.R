@@ -810,6 +810,8 @@ create_covr_list_no_skip <- function(test_map,
   used_datasets <- unique(unlist(used_datasets))
   used_datasets <- used_datasets[used_datasets %in% available_datasets]
   
+  coverage_error <- NULL
+  
   # Load datasets if needed
   if (length(used_datasets) > 0) {
     message(paste0("Loading datasets used in testing: ", paste(used_datasets, collapse = ", ")))
@@ -822,8 +824,6 @@ create_covr_list_no_skip <- function(test_map,
     }
     
     message(paste0("Running coverage manually for ", pkg))
-    
-    coverage_error <- NULL
     
     # Copy the whole test tree (data, snapshots, helpers, setup) to a temp
     # workspace so testthat::test_dir() can run helpers and setup itself
@@ -876,7 +876,13 @@ create_covr_list_no_skip <- function(test_map,
     message(paste0("Creating package coverage for ", pkg))
     # unload package before running package_coverage
     try(unloadNamespace(pkg), silent = TRUE)
-    coverage <- covr::package_coverage(path = pkg_source_path, type = "tests")
+    coverage <- tryCatch(
+      covr::package_coverage(path = pkg_source_path, type = "tests"),
+      error = function(e) {
+        message(paste0("Package coverage failed for ", pkg, ": ", e$message))
+        NULL
+      }
+    )
     rm(list = ls(envir = run_env), envir = run_env)
   }
   

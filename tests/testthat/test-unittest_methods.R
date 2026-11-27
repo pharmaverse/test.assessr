@@ -728,6 +728,21 @@ test_that("check_pkg_tests_and_snaps: pure testthat has no RUnit dirs", {
   expect_false(result$has_RUnit_test)
 })
 
+test_that("check_pkg_tests_and_snaps: cleanr-like layout (launcher + inst/runit_tests) sets has_RUnit_test", {
+  pkg_dir <- tempfile("pkg_cleanr")
+  make_cleanr_like_pkg(pkg_dir)
+  on.exit(unlink(pkg_dir, recursive = TRUE), add = TRUE)
+  
+  result <- check_pkg_tests_and_snaps(pkg_dir)
+  
+  expect_false(result$has_RUnit_tests_dir)
+  expect_true(is.na(result$runit_tests_dir))
+  expect_true(any(grepl("runit\\.R$", result$runit_launchers)))
+  expect_true(result$has_RUnit_test)
+  expect_true(result$has_testthat)
+})
+
+
 test_that("check_pkg_tests_and_snaps: unreadable launcher treated as non-launcher", {
   pkg_dir <- tempfile("pkg_unread")
   dir.create(file.path(pkg_dir, "tests", "RUnit", "common"), recursive = TRUE)

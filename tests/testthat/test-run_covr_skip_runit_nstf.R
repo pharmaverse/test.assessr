@@ -3902,3 +3902,87 @@ test_that("get_source_test_mapping_runit_nstf covers setGeneric, empty-file, sho
   expect_true(nrow(zzz_row) >= 1L)
   expect_false(is.na(zzz_row$test_file[[1]]))
 })
+
+
+# ---- cleanr-like layout: launcher + inst/runit_tests (no tests/RUnit, no inst/unitTests) ----
+
+test_that("is_runit_layout returns TRUE when only runit_launchers present", {
+  td <- withr::local_tempdir()
+  test_pkg_data <- list(
+    has_BioG_test  = FALSE,
+    has_RUnit_test = FALSE,
+    runit_launchers = c(file.path(td, "tests", "runit.R"))
+  )
+  expect_true(is_runit_layout(td, test_pkg_data))
+})
+
+test_that("is_runit_layout returns FALSE when no RUnit signals at all", {
+  td <- withr::local_tempdir()
+  test_pkg_data <- list(
+    has_BioG_test   = FALSE,
+    has_RUnit_test  = FALSE,
+    runit_launchers = character(0)
+  )
+  expect_false(is_runit_layout(td, test_pkg_data))
+})
+
+test_that("run_covr_skip_runit_nstf: cleanr-like layout uses launcher even when inst/unitTests absent", {
+  pkg_dir <- tempfile("pkg_cleanr_runner")
+  make_cleanr_like_pkg(pkg_dir)
+  on.exit(unlink(pkg_dir, recursive = TRUE), add = TRUE)
+  
+  test_pkg_data <- list(
+    has_RUnit_tests_dir = FALSE,
+    has_RUnit_test      = TRUE,
+    has_BioG_test       = FALSE,
+    has_doRUnit         = FALSE,
+    doRUnit_path        = NA_character_,
+    bioc_run_ut_path    = NA_character_,
+    runit_launchers     = c(file.path(pkg_dir, "tests", "runit.R")),
+    runit_tests_dir     = NA_character_
+  )
+  
+  fake_cov <- structure(list(), class = "coverage")
+  fake_pct <- 75.0
+  
+  mockery::stub(run_covr_skip_runit_nstf, "get_pkg_name",   function(...) "cleanrlike")
+  mockery::stub(run_covr_skip_runit_nstf, "is_runit_layout", function(...) TRUE)
+  mockery::stub(run_covr_skip_runit_nstf, "get_runit_test_paths", function(...) list())
+  mockery::stub(run_covr_skip_runit_nstf, "restrict_test_paths_to_framework", function(x, ...) x)
+  mockery::stub(run_covr_skip_runit_nstf, "get_source_test_mapping_runit_nstf", function(...) {
+    data.frame(source_file = character(0), test_file = character(0),
+               evidence = character(0), has_tests = logical(0), stringsAsFactors = FALSE)
+  })
+  mockery::stub(run_covr_skip_runit_nstf, "prepare_for_bioc_runit", function(...) invisible(NULL))
+  mockery::stub(run_covr_skip_runit_nstf, "check_covr_skip_runit_nstf", function(...) {
+    data.frame(test_file = NA_character_, issue_type = "No tests skipped", stringsAsFactors = FALSE)
+  })
+  mockery::stub(run_covr_skip_runit_nstf, "get_function_no_tests", function(...) data.frame())
+  mockery::stub(run_covr_skip_runit_nstf, "build_runit_launcher_runner", function(...) {
+    f <- tempfile(fileext = ".R"); writeLines("# dummy", f); f
+  })
+  mockery::stub(run_covr_skip_runit_nstf, "covr::package_coverage", function(...) fake_cov)
+  mockery::stub(run_covr_skip_runit_nstf, "covr::percent_coverage", function(...) fake_pct)
+  mockery::stub(run_covr_skip_runit_nstf, "load_package_datasets", function(...) character(0))
+  mockery::stub(run_covr_skip_runit_nstf, "covr::coverage_to_list", function(...) {
+    list(filecoverage = matrix(fake_pct, dimnames = list("greet.R")), totalcoverage = fake_pct)
+  })
+  mockery::stub(run_covr_skip_runit_nstf, "compute_total_coverage", function(...) {
+    list(total_cov = fake_pct / 100, percent_cov = fake_pct,
+         n_testfiles = 1L, n_no_function_tests = 0L, n_skipped_files = 0L)
+  })
+  mockery::stub(run_covr_skip_runit_nstf, "get_coverage_pass_fail",  function(...) TRUE)
+  mockery::stub(run_covr_skip_runit_nstf, "cleanup_and_return_null", function(...) NULL)
+  mockery::stub(run_covr_skip_runit_nstf, "pkgload::load_all",       function(...) invisible(NULL))
+  mockery::stub(run_covr_skip_runit_nstf, "detach_pkg_if_attached",  function(...) invisible(TRUE))
+  mockery::stub(run_covr_skip_runit_nstf, "asNamespace",             function(...) baseenv())
+  
+  result <- run_covr_skip_runit_nstf(
+    pkg_source_path = pkg_dir,
+    test_pkg_data   = test_pkg_data,
+    cov_env         = new.env(),
+    layout          = "inst_unitTests"
+  )
+  
+  expect_false(is.null(result))
+})
