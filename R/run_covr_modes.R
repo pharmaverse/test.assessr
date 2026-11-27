@@ -179,6 +179,14 @@ run_covr_decider <- function(framework,
     return(list(covr_list = covr_list, tf_type = "non-standard testing framework - testit"))
   }
   
+  if (identical(framework, "runit")) {
+    layout <- resolve_runit_layout(pkg_source_path, test_pkg_data)
+    message("decider: runit layout = ", layout)
+    covr_list <- run_covr_skip_runit_nstf(pkg_source_path, test_pkg_data, cov_env, framework = "runit", layout = layout)
+    return(list(covr_list = covr_list, tf_type = "non-standard testing framework - RUnit"))
+  }
+  
+  return(list(covr_list = NULL, tf_type = NULL))
 }
 
 #' Run coverage for a single test framework
@@ -208,7 +216,8 @@ run_one_framework <- function(framework,
   )
   
   
-  if (framework %in% c("testthat", "testit")) {
+  runit_has_tests <- isTRUE(test_pkg_data$has_RUnit_test) || isTRUE(test_pkg_data$has_RUnit_tests_dir)
+  if (framework %in% c("testthat", "testit") || (framework == "runit" && runit_has_tests)) {
     # Decide and execute the correct runner
     res <- run_covr_decider(
       framework       = framework,
@@ -246,15 +255,15 @@ run_one_framework <- function(framework,
     covr_list <- run_covr_skip_dt_nstf(pkg_source_path, test_pkg_data, cov_env)
     tf_type <- "non-standard testing framework - data.table"
     
-  }  else if (test_pkg_data$has_RUnit_test && !test_pkg_data$has_BioG_test) {
-    message("running non-standard RUnit testing framework")
-    covr_list <- run_covr_skip_runit_nstf(pkg_source_path, test_pkg_data, cov_env, framework = framework)    
-    tf_type <- "non-standard testing framework - RUnit"  
-    
   } else if (framework == "bioconductor") {
     message("running non-standard Bioconductor testing framework")
     covr_list <- run_covr_skip_bioc_nstf(pkg_source_path, test_pkg_data, cov_env, framework = framework)
     tf_type <- "non-standard testing framework - Bioconductor"
+    
+  } else if (isTRUE(test_pkg_data$has_RUnit_test) && !isTRUE(test_pkg_data$has_BioG_test)) {
+    message("running non-standard RUnit testing framework")
+    covr_list <- run_covr_skip_runit_nstf(pkg_source_path, test_pkg_data, cov_env)
+    tf_type <- "non-standard testing framework - RUnit"
     
   } else {
     message("No recognised standard or non-standard testing configuration")
@@ -937,12 +946,10 @@ remove_new_globals <- function(env, initial_state, patterns = NULL, dry_run = FA
   }
   
   if (dry_run) {
-    message("New globals detected (dry run):")
-    print(new_objs)
+    message("New globals detected (dry run): ", paste(new_objs, collapse = ", "))
   } else {
     rm(list = new_objs, envir = env)
-    message("Removed new globals:")
-    print(new_objs)
+    message("Removed new globals: ", paste(new_objs, collapse = ", "))
   }
   
   invisible(new_objs)

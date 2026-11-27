@@ -15,18 +15,21 @@ A list with:
   - `has_testit`: Does tests/testit exist?
   - `has_tests_base`: Do tests exist in tests subdirectory?
   - `has_BioG_test`: Do BioGenerics tests exist in inst/tests subdirectory?
-  - `has_RUnit_test`: Do RUnit tests exist (inst/unitTests; optionally tests/run_unitTests.R)?
+  - `has_RUnit_test`: Do RUnit tests exist (inst/unitTests, tests/RUnit, or launcher-based)?
   - `bioc_unit_tests_dir` : location of BioGenerics unit tests
   - `bioc_run_ut_path`: location of BioGenerics `run_unitTests.R`
   - `has_snaps`: Does _snaps exist inside tests/testthat?
   - `n_golden_tests`: Number of snapshot files inside _snaps
   - `n_test_files`: Number of test-*.R files inside tests/testthat
-  - `has_tinytest` : Does tinytest exist? 
+  - `has_tinytest` : Does tinytest exist?
   - `tinytest_dir` : location of tinytest  unit tests
   - `tinytest_runner_paths` : location of tinytest runner paths
-  - `n_tinytest_files` :  Number of test_*.R files under inst/tinytest  
+  - `n_tinytest_files` :  Number of test_*.R files under inst/tinytest
   - `has_data_table_tests`: Do data.table tests exist in directories?
   - `data_table_tests_path` : location of data.table unit tests
+  - `has_RUnit_tests_dir`: Do RUnit tests exist in tests/RUnit?
+  - `runit_tests_dir`: Path to tests/RUnit, or NA_character_
+  - `runit_launchers`: Character vector of pls-style launcher scripts
 }
 \description{
 Check for tests/testthat and _snaps folder and count golden tests

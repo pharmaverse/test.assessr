@@ -7,18 +7,21 @@
 #'   - `has_testit`: Does tests/testit exist?
 #'   - `has_tests_base`: Do tests exist in tests subdirectory?
 #'   - `has_BioG_test`: Do BioGenerics tests exist in inst/tests subdirectory?
-#'   - `has_RUnit_test`: Do RUnit tests exist (inst/unitTests; optionally tests/run_unitTests.R)?
+#'   - `has_RUnit_test`: Do RUnit tests exist (inst/unitTests, tests/RUnit, or launcher-based)?
 #'   - `bioc_unit_tests_dir` : location of BioGenerics unit tests
 #'   - `bioc_run_ut_path`: location of BioGenerics `run_unitTests.R`
 #'   - `has_snaps`: Does _snaps exist inside tests/testthat?
 #'   - `n_golden_tests`: Number of snapshot files inside _snaps
 #'   - `n_test_files`: Number of test-*.R files inside tests/testthat
-#'   - `has_tinytest` : Does tinytest exist? 
+#'   - `has_tinytest` : Does tinytest exist?
 #'   - `tinytest_dir` : location of tinytest  unit tests
 #'   - `tinytest_runner_paths` : location of tinytest runner paths
-#'   - `n_tinytest_files` :  Number of test_*.R files under inst/tinytest  
+#'   - `n_tinytest_files` :  Number of test_*.R files under inst/tinytest
 #'   - `has_data_table_tests`: Do data.table tests exist in directories?
 #'   - `data_table_tests_path` : location of data.table unit tests
+#'   - `has_RUnit_tests_dir`: Do RUnit tests exist in tests/RUnit?
+#'   - `runit_tests_dir`: Path to tests/RUnit, or NA_character_
+#'   - `runit_launchers`: Character vector of pls-style launcher scripts
 #' @keywords internal
 check_pkg_tests_and_snaps <- function(pkg_source_path) {
   
@@ -30,7 +33,7 @@ check_pkg_tests_and_snaps <- function(pkg_source_path) {
   testit_path    <- file.path(test_dir, "testit")
   test_ci_path   <- file.path(test_dir, "test-ci")
   test_cran_path <- file.path(test_dir, "test-cran")
-
+  
   # --- tinytest discovery (inst/tinytest + common runner files in tests/) ---
   tinytest_dir <- file.path(pkg_source_path, "inst", "tinytest")
   # Some packages expose a tinytest runner in tests/ (names vary)
@@ -48,7 +51,7 @@ check_pkg_tests_and_snaps <- function(pkg_source_path) {
   # Check for testthat and testit (standard and nonstandard)
   has_testthat <- dir.exists(testthat_path)
   has_testit <- dir.exists(testit_path) || (dir.exists(test_ci_path) && dir.exists(test_cran_path))
-
+  
   # ---------- data.table-specific detection ----------
   # Canonical entrypoint and raw drivers:
   # - tests/main.R   (calls test.data.table() -> full suite)  [preferred]
@@ -103,7 +106,7 @@ check_pkg_tests_and_snaps <- function(pkg_source_path) {
     0
   }
   
-
+  
   # --- Count tinytest test files (any *.R under inst/tinytest) ---
   n_tinytest_files <- if (has_tinytest_dir) {
     list.files(tinytest_dir, pattern = "\\.[rR]$", recursive = TRUE, full.names = TRUE) |>
@@ -134,16 +137,29 @@ check_pkg_tests_and_snaps <- function(pkg_source_path) {
   has_doRUnit <- file.exists(doRUnit_path)
   doRUnit_path <- if (has_doRUnit) doRUnit_path else NA_character_
   
+  # ---------- tests/RUnit (pls-style layout) ----------
+  runit_tests_dir <- file.path(test_dir, "RUnit")
+  runit_files <- if (dir.exists(runit_tests_dir)) {
+    list.files(runit_tests_dir, pattern = "^runit.*\\.[rR]$", recursive = TRUE)
+  } else character(0)
+  has_RUnit_tests_dir <- length(runit_files) > 0
+  
+  top_r <- list.files(test_dir, pattern = "\\.[rR]$", full.names = TRUE, recursive = FALSE)
+  runit_launchers <- top_r[vapply(top_r, function(f) {
+    any(grepl("defineTestSuite|runTestSuite", tryCatch(readLines(f, warn = FALSE), error = function(e) character(0))))
+  }, logical(1))]
+  
   # ---------- RUnit-only (inst/unitTests; optionally tests/run_unitTests.R) ----------
   # Broader than BioG: does not require .test <- function in zzz.R
   # Treat as "RUnit-only" by excluding full BioG/BiocGenerics layouts
-  has_RUnit_test <- has_bioc_unit_tests && !has_BioG_test
+  has_RUnit_test <- (has_bioc_unit_tests && !has_BioG_test) || has_RUnit_tests_dir || length(runit_launchers) > 0
   
   # ---------- base-R style tests (only if no known frameworks) ----------
   has_tests_base <- FALSE
-  if (!has_data_table_tests && !has_tinytest && 
-      !has_testthat && !has_testit && 
+  if (!has_data_table_tests && !has_tinytest &&
+      !has_testthat && !has_testit &&
       !has_RUnit_test && !has_BioG_test &&
+      !has_RUnit_tests_dir &&
       !dir.exists(test_ci_path) && !dir.exists(test_cran_path)) {
     
     base_test_files <- list.files(
@@ -153,12 +169,12 @@ check_pkg_tests_and_snaps <- function(pkg_source_path) {
       recursive    = FALSE,          # only top-level
       ignore.case  = TRUE,           # handle .R vs .r
       include.dirs = FALSE,          # don’t return directories
-      no..         = TRUE            # exclude '.' and '..'
+      no..         = TRUE            # exclude ‘.’ and ‘..’
     )
     
     # Exclude RUnit launchers (BioC and CRAN conventions)
     base_test_files <- base_test_files[
-      !basename(base_test_files) %in% c("run_unitTests.R", "doRUnit.R")
+      !basename(base_test_files) %in% c("run_unitTests.R", "doRUnit.R", basename(runit_launchers))
     ]
     has_tests_base <- length(base_test_files) > 0
   }
@@ -181,11 +197,14 @@ check_pkg_tests_and_snaps <- function(pkg_source_path) {
     tinytest_runner_paths = if (has_tinytest_runner) tinytest_runner_vec else character(0),
     n_tinytest_files      = n_tinytest_files,
     has_data_table_tests  = has_data_table_tests,
-    data_table_tests_path = data_table_tests_path
+    data_table_tests_path = data_table_tests_path,
+    has_RUnit_tests_dir = has_RUnit_tests_dir,
+    runit_tests_dir = if (has_RUnit_tests_dir) runit_tests_dir else NA_character_,
+    runit_launchers = runit_launchers
   )
-
+  
   return(test_types)
-
+  
 }
 
 

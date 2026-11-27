@@ -2649,3 +2649,36 @@ test_that("run_covr_skip_stf keeps long_summary when no tests fail (no-skip path
   expect_equal(nrow(result$long_summary), 2L)
   expect_true(all(c("code_script", "context") %in% names(result$long_summary)))
 })
+
+test_that("create_covr_list_no_skip: package_coverage error is caught and returns zero coverage", {
+  test_map         <- data.frame(file = "test-file.R", stringsAsFactors = FALSE)
+  test_results_long <- list()
+  pkg_source_path  <- "mock/path"
+  pkg              <- "fakepkg"
+  
+  mockery::stub(create_covr_list_no_skip, "safe_unload_package",   function(pkg) NULL)
+  mockery::stub(create_covr_list_no_skip, "load_package_into_env", function(path, pkg, env) NULL)
+  mockery::stub(
+    create_covr_list_no_skip,
+    "utils::data",
+    function(package, ...) {
+      list(results = data.frame(Item = character(0), stringsAsFactors = FALSE))
+    }
+  )
+  mockery::stub(create_covr_list_no_skip, "file.exists",  function(f) TRUE)
+  mockery::stub(create_covr_list_no_skip, "readLines",    function(file, warn) "some unrelated code")
+  mockery::stub(create_covr_list_no_skip, "cleanup_and_return_null", function(..., env) NULL)
+  
+  # Simulate a runit launcher stop() propagating through covr::package_coverage
+  mockery::stub(create_covr_list_no_skip, "covr::package_coverage",
+                function(...) stop("RUnit failed."))
+  
+  cov_env <- new.env(parent = emptyenv())
+  msgs <- testthat::capture_messages({
+    result <- create_covr_list_no_skip(test_map, test_results_long, pkg_source_path, pkg, cov_env)
+  })
+  
+  expect_true(any(grepl("Package coverage failed for fakepkg", msgs, fixed = TRUE)))
+  expect_false(is.null(result))
+  expect_equal(result$total_cov, 0)
+})

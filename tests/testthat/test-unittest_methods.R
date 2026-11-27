@@ -347,7 +347,7 @@ test_that("stub: rounding behavior can be validated separately", {
 })  
 
 test_that("data_table_tests_path returns dt_main when has_dt_main is TRUE", {
- 
+  
   pkg_dir <- tempfile("pkg_dt_main")
   dir.create(file.path(pkg_dir, "tests"), recursive = TRUE)
   
@@ -693,4 +693,69 @@ test_that("data_table_tests_path prefers tests.Rraw over inst tests", {
   expect_equal(result$data_table_tests_path, tests_rraw_path)
   
   unlink(pkg_dir, recursive = TRUE)
+})
+
+
+# ---- Issue #26: tests/RUnit (pls-style) detection ----
+
+test_that("check_pkg_tests_and_snaps detects pls-like layout", {
+  pkg_dir <- tempfile("pkg_pls")
+  make_pls_like_pkg(pkg_dir)
+  on.exit(unlink(pkg_dir, recursive = TRUE), add = TRUE)
+  
+  result <- check_pkg_tests_and_snaps(pkg_dir)
+  
+  expect_true(result$has_RUnit_tests_dir)
+  expect_equal(result$runit_tests_dir, file.path(pkg_dir, "tests", "RUnit"))
+  expect_true(any(grepl("test_library\\.R$", result$runit_launchers)))
+  expect_true(result$has_RUnit_test)
+  expect_false(result$has_tests_base)
+})
+
+test_that("check_pkg_tests_and_snaps: pure testthat has no RUnit dirs", {
+  pkg_dir <- tempfile("pkg_tt")
+  dir.create(file.path(pkg_dir, "tests", "testthat"), recursive = TRUE)
+  writeLines('test_check("pkg")', file.path(pkg_dir, "tests", "testthat.R"))
+  writeLines(c('test_that("x", expect_true(TRUE))'),
+             file.path(pkg_dir, "tests", "testthat", "test-x.R"))
+  on.exit(unlink(pkg_dir, recursive = TRUE), add = TRUE)
+  
+  result <- check_pkg_tests_and_snaps(pkg_dir)
+  
+  expect_false(result$has_RUnit_tests_dir)
+  expect_true(is.na(result$runit_tests_dir))
+  expect_length(result$runit_launchers, 0)
+  expect_false(result$has_RUnit_test)
+})
+
+test_that("check_pkg_tests_and_snaps: cleanr-like layout (launcher + inst/runit_tests) sets has_RUnit_test", {
+  pkg_dir <- tempfile("pkg_cleanr")
+  make_cleanr_like_pkg(pkg_dir)
+  on.exit(unlink(pkg_dir, recursive = TRUE), add = TRUE)
+  
+  result <- check_pkg_tests_and_snaps(pkg_dir)
+  
+  expect_false(result$has_RUnit_tests_dir)
+  expect_true(is.na(result$runit_tests_dir))
+  expect_true(any(grepl("runit\\.R$", result$runit_launchers)))
+  expect_true(result$has_RUnit_test)
+  expect_true(result$has_testthat)
+})
+
+
+test_that("check_pkg_tests_and_snaps: unreadable launcher treated as non-launcher", {
+  pkg_dir <- tempfile("pkg_unread")
+  dir.create(file.path(pkg_dir, "tests", "RUnit", "common"), recursive = TRUE)
+  writeLines("# dummy", file.path(pkg_dir, "tests", "RUnit", "common", "runit.a.R"))
+  # launcher exists but readLines will get an empty character via error mock
+  stub_launcher <- file.path(pkg_dir, "tests", "stub_launcher.R")
+  writeLines("# no suite calls here", stub_launcher)
+  on.exit(unlink(pkg_dir, recursive = TRUE), add = TRUE)
+  
+  result <- check_pkg_tests_and_snaps(pkg_dir)
+  
+  # has_RUnit_tests_dir should still be TRUE (runit.a.R found)
+  expect_true(result$has_RUnit_tests_dir)
+  # stub_launcher has no defineTestSuite/runTestSuite so it is NOT in runit_launchers
+  expect_false(any(grepl("stub_launcher", result$runit_launchers)))
 })
