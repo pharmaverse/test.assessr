@@ -147,6 +147,8 @@ run_covr_skip_nstf <- function(pkg_source_path,
   # ---- build test files list per framework ----
   if (isTRUE(test_pkg_data$has_testit)) {
     test_files_clean <- file.path(pkg_source_path, "tests", "testit", clean_mapping$test_file)
+    # helper files are sourced as helpers, never run as tests
+    test_files_clean <- test_files_clean[!grepl("^helper.*\\.[rR]$", basename(test_files_clean))]
     if (!is.null(skip_tests) | (length(skip_tests) > 0)) {
       test_files_clean <- setdiff(test_files_clean, file.path(pkg_source_path, "tests", "testit", skip_tests))
     }
@@ -224,6 +226,12 @@ run_covr_skip_nstf <- function(pkg_source_path,
       env = cov_env)
   })
   
+  # testit: make helper*.R / helpers/*.R objects visible to tests under coverage
+  if (isTRUE(test_pkg_data$has_testit)) {
+    load_testit_into_env(cov_env)
+    source_testit_helpers(cov_env, file.path(pkg_source_path, "tests", "testit"))
+  }
+  
   # tests_base: refine functions_no_tests using the package's real exported functions,
   # matched against real test-file content rather than filename similarity. Requires the
   # package to already be loaded (pkgload::load_all() above), since getNamespaceExports()
@@ -232,11 +240,11 @@ run_covr_skip_nstf <- function(pkg_source_path,
   # it should never make the diagnostic worse than what already runs today.
   if (isTRUE(test_pkg_data$has_tests_base) && !is.null(base_test_files)) {
     export_mapping <- tryCatch(
-        get_source_test_mapping_by_exports(pkg_source_path, pkg_name, base_test_files),
-            error = function(e) {
-              message("Export-based mapping failed for ", pkg_name, " : ", e$message)
-              NULL
-            }
+      get_source_test_mapping_by_exports(pkg_source_path, pkg_name, base_test_files),
+      error = function(e) {
+        message("Export-based mapping failed for ", pkg_name, " : ", e$message)
+        NULL
+      }
     )
     if (!is.null(export_mapping)) {
       no_tests_df <- get_function_no_tests(export_mapping)
@@ -487,8 +495,26 @@ check_covr_skip_testit <- function(pkg_name, mapping, test_path) {
   
   pkg_root <- find_pkg_root(test_path)
   
+  # testit semantics: tests see the package namespace, so load the package
+  # source first when it is not already loaded (probing runs before load_all()).
+  if (!isNamespaceLoaded(pkg_name) && dir.exists(pkg_root)) {
+    tryCatch(
+      pkgload::load_all(pkg_root, quiet = TRUE, helpers = FALSE),
+      error = function(e) message("Could not load ", pkg_name, " for testit probing : ", conditionMessage(e))
+    )
+  }
+  
+  # helpers are sourced first into an env whose parent is the package
+  # namespace (when loaded); each test then runs in a child of that env.
+  parent_env <- if (isNamespaceLoaded(pkg_name)) asNamespace(pkg_name) else environment()
+  helper_env <- new.env(parent = parent_env)
+  load_testit_into_env(helper_env)
+  source_testit_helpers(helper_env, test_path)
+  
   # Prepare mapping
   clean_mapping <- if (anyNA(mapping)) tidyr::drop_na(mapping) else mapping
+  # helper files are sourced as helpers, never run as tests
+  clean_mapping <- clean_mapping[!grepl("^helper.*\\.[rR]$", basename(clean_mapping$test_file)), , drop = FALSE]
   
   problems <- data.frame(test_file = character(), issue_type = character(), stringsAsFactors = FALSE)
   
@@ -502,7 +528,7 @@ check_covr_skip_testit <- function(pkg_name, mapping, test_path) {
     result <- tryCatch(
       {
         capture.output(
-          source(test_file_path, local = new.env()),
+          source(test_file_path, local = new.env(parent = helper_env)),
           file = NULL
         )
         NULL
@@ -529,6 +555,68 @@ check_covr_skip_testit <- function(pkg_name, mapping, test_path) {
   }
   
   return(problems)
+}
+
+#' Make testit functions visible in an environment
+#'
+#' Copies testit exports (e.g. assert) into env, as library(testit) does in tests/test-all.R.
+#'
+#' @param env Environment receiving the testit functions.
+#'
+#' @return Character vector of names copied; empty if testit is unavailable.
+#' @noRd
+load_testit_into_env <- function(env) {
+  checkmate::assert_environment(env, .var.name = "env")
+  
+  if (!requireNamespace("testit", quietly = TRUE)) {
+    message("testit is not installed; testit functions not loaded into environment")
+    return(character(0))
+  }
+  
+  exports <- getNamespaceExports("testit")
+  list2env(mget(exports, envir = asNamespace("testit")), envir = env)
+  return(exports)
+}
+
+#' Source testit helper files into an environment
+#'
+#' Sources helper*.R from the testit test directory and .R files from a
+#' sibling helpers directory.
+#'
+#' @param env Environment receiving the helper objects.
+#' @param test_path Path to the testit test directory.
+#'
+#' @return Character vector of helper files sourced; empty if none.
+#' @noRd
+source_testit_helpers <- function(env, test_path) {
+  checkmate::assert_environment(env, .var.name = "env")
+  checkmate::assert_string(test_path, .var.name = "test_path")
+  
+  message("Sourcing testit helpers")
+  
+  helper_dir <- file.path(dirname(test_path), "helpers")
+  helper_files <- c(
+    if (dir.exists(helper_dir)) {
+      list.files(helper_dir, pattern = "\\.[rR]$", full.names = TRUE)
+    },
+    if (dir.exists(test_path)) {
+      list.files(test_path, pattern = "^helper.*\\.[rR]$", full.names = TRUE)
+    }
+  )
+  
+  loaded <- unlist(lapply(helper_files, function(file) {
+    ok <- tryCatch({
+      sys.source(file, envir = env)
+      TRUE
+    }, error = function(e) {
+      message("Failed to source testit helper file: ", file, " : ", conditionMessage(e))
+      FALSE
+    })
+    if (ok) file else NULL
+  }))
+  
+  if (is.null(loaded)) loaded <- character(0)
+  return(loaded)
 }
 
 

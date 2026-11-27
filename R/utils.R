@@ -58,7 +58,12 @@ get_test_metadata <- function(executor = NULL) {
 #' @export
 get_pkg_name <- function(input_string) {
   
-  # check if input string is a file path or filename   
+  # treat Windows backslashes as separators and drop trailing separators so
+  # paths from Windows, Linux and macOS are handled identically
+  input_string <- stringr::str_replace_all(input_string, "\\\\", "/")
+  input_string <- stringr::str_remove(input_string, "/+$")
+  
+  # check if input string is a file path or filename
   test_string <-  stringr::str_match(input_string, "/")  
   
   if (any(is.na(test_string)) == FALSE) {

@@ -5,6 +5,8 @@ test.package.0003,test.package.0003_0.1.0.tar.gz,1 note  - new submission to CRA
 test.package.0004,test.package.0004_0.1.0.tar.gz,no notes - no tests
 test.package.0005,test.package.0005_0.1.0.tar.gz,1 notes - no testable functions
 test.package.0014,test.package.0014_0.1.0.tar.gz,Package with passing and failing tests
+test.package.0015,test.package.0015_0.1.0.tar.gz,Package with testit tests and test-all.R
+test.package.0016,test.package.0016_0.1.0.tar.gz,Package with testit tests and no test-all.R
 no_vignette.tar.gz , no_vignette.tar.gz, Package with no vignette
 just_vignette_folder.tar.gz , just_vignette_folder.tar.gz, Package with "vignette" folder, but no vignette
 got_vignette.teeeeeeear , got_vignette.teeeeeeear.tar.gz, Package with wrong and non tar extension
